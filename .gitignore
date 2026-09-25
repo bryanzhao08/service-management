@@ -46,3 +46,9 @@ next-env.d.ts
 # are added deliberately at build-order step 12.
 /docs/screenshots/ui-gallery-*.png
 /docs/screenshots/wordmark.png
+
+# Prisma 7 generates a TypeScript client here; `postinstall` recreates it.
+/src/generated/
+
+# Local storage driver and dev email outbox.
+/.data/

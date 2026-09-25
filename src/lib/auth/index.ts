@@ -1,0 +1,100 @@
+import NextAuth from "next-auth";
+import type { Provider } from "next-auth/providers";
+import {
+  createAuthAdapter,
+  findSessionClaims,
+  findSignInUserByEmail,
+} from "@/lib/db/auth-adapter";
+import { getEmailProvider } from "@/lib/email/provider";
+import { magicLinkEmail } from "@/lib/email/templates";
+import { authConfig, MAGIC_LINK_MAX_AGE_SECONDS } from "./config";
+
+/**
+ * Node-only. Adds the adapter and the magic-link provider to the edge-safe
+ * `authConfig`.
+ *
+ * `type: "email"` is what makes the link single-use and time-limited: Auth.js
+ * stores a one-time token via the adapter and deletes it on redemption, so
+ * neither property is reimplemented here.
+ */
+const magicLink: Provider = {
+  id: "magic-link",
+  type: "email",
+  name: "Email",
+  from: process.env.EMAIL_FROM ?? "Transient <reports@transient.local>",
+  maxAge: MAGIC_LINK_MAX_AGE_SECONDS,
+  options: {},
+
+  async sendVerificationRequest({ identifier, url }) {
+    // Transient has no self-registration, so a link to an unknown address would
+    // be undeliverable anyway. Returning quietly rather than throwing keeps the
+    // sign-in form's response identical for known and unknown addresses, so it
+    // cannot be used to enumerate who has an account.
+    const user = await findSignInUserByEmail(identifier);
+    if (!user) {
+      console.info(`[auth] sign-in requested for unknown address, not sending`);
+      return;
+    }
+
+    await getEmailProvider().send(
+      magicLinkEmail({
+        to: identifier,
+        url,
+        expiresInMinutes: Math.round(MAGIC_LINK_MAX_AGE_SECONDS / 60),
+      }),
+    );
+  },
+};
+
+export const { handlers, signIn, signOut, auth } = NextAuth({
+  ...authConfig,
+  adapter: createAuthAdapter(),
+  providers: [magicLink],
+  callbacks: {
+    ...authConfig.callbacks,
+
+    /**
+     * Second gate behind `createUser` throwing. A user must already exist and
+     * must belong to a company; a row without one could not be scoped, so it is
+     * refused rather than allowed through with a null tenant.
+     *
+     * Auth.js runs this callback twice for an email provider: once when the
+     * link is *requested* and again when it is *redeemed*. Refusing on the
+     * request leg throws AccessDenied, which the sign-in form renders as an
+     * error, so the page would answer "does this account exist" — measured,
+     * not theorised: an unknown address stayed on /sign-in while a known one
+     * advanced. The request leg is therefore always allowed through and
+     * `sendVerificationRequest` is what quietly declines to deliver. Nothing
+     * is weakened, because the redemption leg below still runs.
+     */
+    async signIn({ user, email }) {
+      if (email?.verificationRequest) return true;
+      if (!user.email) return false;
+      const known = await findSignInUserByEmail(user.email);
+      return Boolean(known?.companyId);
+    },
+
+    /**
+     * Mints the token. Reads claims from the database only when the token is
+     * first created or a caller explicitly asks for a refresh, so ordinary
+     * navigation costs no query.
+     */
+    async jwt({ token, user, trigger }) {
+      if (!user && trigger !== "update") return token;
+
+      const id = user?.id ?? token.sub;
+      if (!id) return token;
+
+      const claims = await findSessionClaims(id);
+      if (!claims) return token;
+
+      token.sub = claims.id;
+      token.companyId = claims.companyId;
+      token.role = claims.role;
+      token.name = claims.name;
+      token.email = claims.email;
+      token.hasPin = claims.pinHash !== null;
+      return token;
+    },
+  },
+});

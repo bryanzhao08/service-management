@@ -5,3 +5,4 @@ node_modules
 docs/screenshots
 prisma/migrations
 *.md
+src/generated

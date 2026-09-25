@@ -1,0 +1,743 @@
+// Transient — data model.
+//
+// Prisma 7 conventions: the `prisma-client` generator (not the legacy
+// `prisma-client-js`) writes a real ESM client to `output`, and the datasource
+// URL lives in `prisma.config.ts` rather than here.
+//
+// Two rules hold throughout:
+//
+// 1. Everything hangs off Company, directly or through Site. `lib/db/scoped.ts`
+//    is the only place allowed to build a where-clause, so that tenancy is
+//    enforced in one auditable spot rather than remembered at 200 call sites.
+// 2. Anything a phone can create offline carries a `clientId @unique`. The
+//    client generates it, so replaying the same outbox batch twice upserts
+//    instead of duplicating. That is what makes sync idempotent.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  GUARD
+  SUPERVISOR
+  ADMIN
+  OWNER
+}
+
+enum LoggingMode {
+  FULL
+  LIGHT
+  VERBAL
+}
+
+enum ShiftStatus {
+  SCHEDULED
+  ACTIVE
+  ENDED
+}
+
+enum EntryType {
+  CLOCK_IN
+  CLOCK_OUT
+  NOTE
+  MEDIA
+  INCIDENT
+  PACKAGE
+  PATROL
+  PROPERTY_CHECK
+  BLIND_SPOT_CHECK
+  BREAK_COVER_START
+  BREAK_COVER_END
+  HANDOFF_GIVEN
+  HANDOFF_RECEIVED
+  VISITOR
+  CUSTOM
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum IncidentStatus {
+  OPEN
+  ONGOING
+  RESOLVED
+}
+
+enum MediaKind {
+  PHOTO
+  VIDEO
+}
+
+enum MediaStatus {
+  PENDING
+  UPLOADED
+  PROCESSED
+  FAILED
+}
+
+enum ReportStatus {
+  DRAFT
+  GENERATING
+  READY
+  SENDING
+  SENT
+  PARTIAL
+  FAILED
+}
+
+enum DeliveryStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  DELAYED
+  BOUNCED
+  COMPLAINED
+  FAILED
+  UNCONFIRMED
+}
+
+enum RecipientStatus {
+  UNVERIFIED
+  VERIFIED
+  BOUNCED
+}
+
+enum JobType {
+  GENERATE_REPORT
+  SEND_REPORT
+  PROCESS_MEDIA
+  VERIFY_RECIPIENT
+  SEND_PUSH
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum BlindSpotMethod {
+  PHOTO
+  CAMERA_ROOM
+  PATROL
+  NOT_CHECKED
+}
+
+enum PropertyCheckResult {
+  CLEAR
+  DAMAGE
+  SKIPPED
+}
+
+enum ThemePreference {
+  SYSTEM
+  DARK
+  LIGHT
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------------
+
+model Company {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  /// null means keep everything. Set to N to auto-delete media after N days
+  /// while keeping the generated PDF.
+  retentionDays Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  users       User[]
+  sites       Site[]
+  auditEvents AuditEvent[]
+}
+
+model User {
+  id            String          @id @default(cuid())
+  companyId     String
+  email         String          @unique
+  emailVerified DateTime?
+  name          String
+  image         String?
+  role          Role            @default(GUARD)
+  /// argon2id. Null until the user sets a PIN on their device.
+  pinHash       String?
+  largeText     Boolean         @default(false)
+  theme         ThemePreference @default(SYSTEM)
+  dictationLang String          @default("en-US")
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignments       SiteAssignment[]
+  shifts            Shift[]
+  pushSubscriptions PushSubscription[]
+  notifications     Notification[]
+  entryRevisions    EntryRevision[]
+  reports           Report[]
+  auditEvents       AuditEvent[]
+  blindSpotChecks   BlindSpotCheck[]
+  accounts          Account[]
+  sessions          Session[]
+
+  @@index([companyId])
+  @@index([companyId, role])
+}
+
+// ---------------------------------------------------------------------------
+// Sites and their configuration
+// ---------------------------------------------------------------------------
+
+model Site {
+  id        String      @id @default(cuid())
+  companyId String
+  name      String
+  /// 2-4 characters, unique per company. Prefixes incident codes (WH-0924-03).
+  code      String
+  address   String
+  /// IANA zone. Every "what day is this shift" question is answered here, not
+  /// in the server's local time.
+  timezone  String      @default("America/Los_Angeles")
+  loggingMode LoggingMode @default(FULL)
+
+  footerDisclaimer String?
+  includeLocation  Boolean @default(false)
+  /// Send each recipient their own email rather than one with everyone on it.
+  sendIndividually Boolean @default(true)
+  replyToGuard     Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  areas          Area[]
+  blindSpots     BlindSpot[]
+  entryTypes     SiteEntryType[]
+  shiftTemplates ShiftTemplate[]
+  reportTemplate ReportTemplate?
+  recipients     Recipient[]
+  assignments    SiteAssignment[]
+  shifts         Shift[]
+
+  @@unique([companyId, code])
+  @@index([companyId])
+}
+
+model SiteAssignment {
+  userId    String
+  siteId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([userId, siteId])
+  @@index([siteId])
+}
+
+model Area {
+  id     String @id @default(cuid())
+  siteId String
+  name   String
+  order  Int    @default(0)
+
+  site           Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  entries        Entry[]
+  propertyChecks PropertyCheck[]
+
+  @@index([siteId])
+}
+
+model BlindSpot {
+  id               String  @id @default(cuid())
+  siteId           String
+  name             String
+  description      String?
+  /// A reference photo of what this spot should look like, shown to the guard.
+  referenceMediaId String?
+  requiredAtClockIn Boolean @default(true)
+  order            Int     @default(0)
+
+  site            Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  referenceMedia  Media?           @relation(fields: [referenceMediaId], references: [id], onDelete: SetNull)
+  checks          BlindSpotCheck[]
+
+  @@index([siteId])
+  @@index([referenceMediaId])
+}
+
+/// Incident categories and custom entry types, per site.
+model SiteEntryType {
+  id      String  @id @default(cuid())
+  siteId  String
+  key     String
+  label   String
+  icon    String
+  /// A design-token name (`ember`, `copper`, ...), never a raw hex value, so
+  /// `scripts/contrast.mjs` can keep proving every pairing is legible.
+  color   String
+  enabled Boolean @default(true)
+  order   Int     @default(0)
+
+  site      Site       @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  incidents Incident[]
+
+  @@unique([siteId, key])
+  @@index([siteId])
+}
+
+model ShiftTemplate {
+  id                   String  @id @default(cuid())
+  siteId               String
+  name                 String
+  /// "HH:mm" wall-clock in the site's timezone. Stored as text on purpose: a
+  /// graveyard template is 22:00-08:00 every night regardless of DST, and a
+  /// DateTime would bake in a date that is wrong the next day.
+  startTime            String
+  endTime              String
+  requirePropertyCheck Boolean @default(true)
+  requireBlindSpots    Boolean @default(true)
+  order                Int     @default(0)
+
+  site   Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  shifts Shift[]
+
+  @@index([siteId])
+}
+
+model ReportTemplate {
+  id                  String  @id @default(cuid())
+  siteId              String  @unique
+  /// Ordered list of `{ key, label, enabled }`.
+  sections            Json
+  headerText          String?
+  maxPhotosPerIncident Int    @default(6)
+  maxPhotosPerEntry   Int     @default(3)
+  embedPhotos         Boolean @default(true)
+  coverPage           Boolean @default(true)
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+}
+
+model Recipient {
+  id               String          @id @default(cuid())
+  siteId           String
+  name             String
+  email            String
+  roleLabel        String
+  required         Boolean         @default(true)
+  status           RecipientStatus @default(UNVERIFIED)
+  verifyToken      String?         @unique
+  verifiedAt       DateTime?
+  lastBounceAt     DateTime?
+  lastBounceReason String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  site       Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  deliveries ReportDelivery[]
+
+  @@unique([siteId, email])
+  @@index([siteId])
+}
+
+// ---------------------------------------------------------------------------
+// Shifts and what happens during them
+// ---------------------------------------------------------------------------
+
+model Shift {
+  id             String      @id @default(cuid())
+  siteId         String
+  guardId        String
+  templateId     String?
+  scheduledStart DateTime
+  scheduledEnd   DateTime
+  clockInAt      DateTime?
+  clockOutAt     DateTime?
+  status         ShiftStatus @default(SCHEDULED)
+  isEventNight   Boolean     @default(false)
+  summary        String?
+  handoffNote    String?
+  handoffFromShiftId String?
+  endFlowStartedAt   DateTime?
+  endFlowCompletedAt DateTime?
+  /// Client-generated, so an offline clock-in replayed twice is one shift.
+  clientId       String      @unique
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  site     Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  guard    User           @relation(fields: [guardId], references: [id], onDelete: Cascade)
+  template ShiftTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  handoffFrom Shift?  @relation("ShiftHandoff", fields: [handoffFromShiftId], references: [id], onDelete: SetNull)
+  handoffTo   Shift[] @relation("ShiftHandoff")
+
+  entries         Entry[]
+  reports         Report[]
+  media           Media[]
+  blindSpotChecks BlindSpotCheck[]
+  propertyChecks  PropertyCheck[]
+
+  @@index([siteId, scheduledStart])
+  @@index([guardId])
+  @@index([templateId])
+  @@index([handoffFromShiftId])
+  @@index([status])
+}
+
+model Entry {
+  id            String    @id @default(cuid())
+  shiftId       String
+  type          EntryType
+  occurredAt    DateTime
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  text          String?
+  /// The raw dictation transcript, kept separately from `text` so an edit
+  /// never destroys what was actually said.
+  transcriptRaw String?
+  areaId        String?
+  /// Soft delete: a security log that can be silently erased is not a log.
+  /// The row stays, the report renders it struck through with the reason.
+  deletedAt     DateTime?
+  deleteReason  String?
+  clientId      String    @unique
+
+  shift       Shift           @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  area        Area?           @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  incident    Incident?
+  packageInfo Package?
+  media       Media[]
+  revisions   EntryRevision[]
+
+  @@index([shiftId, occurredAt])
+  @@index([areaId])
+  @@index([type])
+}
+
+model EntryRevision {
+  id          String   @id @default(cuid())
+  entryId     String
+  text        String
+  editedById  String
+  editedAt    DateTime @default(now())
+
+  entry    Entry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  editedBy User  @relation(fields: [editedById], references: [id], onDelete: Cascade)
+
+  @@index([entryId])
+  @@index([editedById])
+}
+
+model Incident {
+  id             String         @id @default(cuid())
+  entryId        String         @unique
+  /// Site code + date in the site's timezone + daily sequence, e.g. WH-0924-03.
+  code           String
+  categoryKey    String
+  siteEntryTypeId String?
+  severity       Severity?
+  status         IncidentStatus @default(OPEN)
+  resolvedAt     DateTime?
+  resolutionNote String?
+  ongoingSince   DateTime?
+
+  entry         Entry          @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  siteEntryType SiteEntryType? @relation(fields: [siteEntryTypeId], references: [id], onDelete: SetNull)
+
+  @@index([code])
+  @@index([siteEntryTypeId])
+  @@index([status])
+}
+
+model Package {
+  id                String    @id @default(cuid())
+  entryId           String    @unique
+  carrier           String?
+  trackingNumber    String?
+  recipientName     String?
+  room              String?
+  deliveredAt       DateTime?
+  deliveredTo       String?
+  signatureMediaId  String?
+
+  entry         Entry  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  signatureMedia Media? @relation(fields: [signatureMediaId], references: [id], onDelete: SetNull)
+
+  @@index([signatureMediaId])
+}
+
+model BlindSpotCheck {
+  id           String          @id @default(cuid())
+  shiftId      String
+  blindSpotId  String
+  method       BlindSpotMethod
+  /// Set when the check was confirmed by someone other than the guard, e.g.
+  /// the camera room operator.
+  verifiedById String?
+  /// Required when method is NOT_CHECKED, so a skip is always explained.
+  reason       String?
+  mediaId      String?
+  at           DateTime        @default(now())
+
+  shift      Shift     @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  blindSpot  BlindSpot @relation(fields: [blindSpotId], references: [id], onDelete: Cascade)
+  verifiedBy User?     @relation(fields: [verifiedById], references: [id], onDelete: SetNull)
+  media      Media?    @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+
+  @@index([shiftId])
+  @@index([blindSpotId])
+  @@index([verifiedById])
+  @@index([mediaId])
+}
+
+model PropertyCheck {
+  id      String              @id @default(cuid())
+  shiftId String
+  areaId  String
+  result  PropertyCheckResult
+  note    String?
+  mediaId String?
+  at      DateTime            @default(now())
+
+  shift Shift  @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  area  Area   @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  media Media? @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+
+  @@index([shiftId])
+  @@index([areaId])
+  @@index([mediaId])
+}
+
+// ---------------------------------------------------------------------------
+// Media
+// ---------------------------------------------------------------------------
+
+model Media {
+  id                 String      @id @default(cuid())
+  shiftId            String
+  entryId            String?
+  kind               MediaKind   @default(PHOTO)
+  status             MediaStatus @default(PENDING)
+  storageKeyOriginal String
+  storageKeyThumb    String?
+  /// A separately downscaled variant sized for embedding in the PDF, so the
+  /// size-budget algorithm has something to step down to.
+  storageKeyPdf      String?
+  posterKey          String?
+  width              Int?
+  height             Int?
+  bytes              Int         @default(0)
+  capturedAt         DateTime
+  exif               Json?
+  clientId           String      @unique
+  createdAt          DateTime    @default(now())
+
+  shift Shift  @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  entry Entry? @relation(fields: [entryId], references: [id], onDelete: SetNull)
+
+  blindSpotReferences BlindSpot[]
+  packageSignatures   Package[]
+  blindSpotChecks     BlindSpotCheck[]
+  propertyChecks      PropertyCheck[]
+
+  @@index([shiftId])
+  @@index([entryId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Reports and delivery
+// ---------------------------------------------------------------------------
+
+model Report {
+  id            String       @id @default(cuid())
+  shiftId       String
+  version       Int          @default(1)
+  status        ReportStatus @default(DRAFT)
+  storageKey    String?
+  bytes         Int?
+  pages         Int?
+  sha256        String?
+  /// The audit trail of the size-budget algorithm: each step it took to get
+  /// under the cap, so a small report can be explained rather than guessed at.
+  sizeSteps     Json?
+  generatedAt   DateTime?
+  sentAt        DateTime?
+  generatedById String
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  shift       Shift            @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  generatedBy User             @relation(fields: [generatedById], references: [id], onDelete: Cascade)
+  deliveries  ReportDelivery[]
+
+  @@unique([shiftId, version])
+  @@index([shiftId])
+  @@index([generatedById])
+  @@index([status])
+}
+
+model ReportDelivery {
+  id                String         @id @default(cuid())
+  reportId          String
+  /// Null once a recipient is deleted; `email` is denormalised so the receipt
+  /// can still say who it went to.
+  recipientId       String?
+  email             String
+  status            DeliveryStatus @default(QUEUED)
+  providerMessageId String?
+  statusAt          DateTime       @default(now())
+  bounceReason      String?
+  attempts          Int            @default(0)
+  lastError         String?
+
+  report    Report     @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  recipient Recipient? @relation(fields: [recipientId], references: [id], onDelete: SetNull)
+
+  @@index([reportId])
+  @@index([recipientId])
+  @@index([providerMessageId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Platform
+// ---------------------------------------------------------------------------
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  companyId  String
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  at         DateTime @default(now())
+  metadata   Json?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, at])
+  @@index([actorId])
+  @@index([entityType, entityId])
+}
+
+model Job {
+  id        String    @id @default(cuid())
+  type      JobType
+  status    JobStatus @default(QUEUED)
+  payload   Json
+  attempts  Int       @default(0)
+  runAfter  DateTime  @default(now())
+  /// Set when a worker claims the row. The sweeper reclaims anything locked
+  /// longer than the lease, so a crashed worker does not strand a job.
+  lockedAt  DateTime?
+  lastError String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([status, runAfter])
+  @@index([type])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  keys      Json
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  url       String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+}
+
+/// Landing page contact form. Deliberately outside Company: a lead has no
+/// tenant yet.
+model Lead {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  company   String
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Auth.js (NextAuth v5) — shapes required by @auth/prisma-adapter.
+// `User` above doubles as the adapter's user model.
+// ---------------------------------------------------------------------------
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
