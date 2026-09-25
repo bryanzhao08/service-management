@@ -1,0 +1,7 @@
+pnpm-lock.yaml
+.next
+node_modules
+.data
+docs/screenshots
+prisma/migrations
+*.md

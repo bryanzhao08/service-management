@@ -1,0 +1,65 @@
+# Local development services for Transient.
+#
+#   pnpm db:up     start both
+#   pnpm db:down   stop both, keep data
+#   pnpm db:reset  drop volumes and re-migrate from scratch
+#
+# Ports are deliberately non-default (5544, not 5432) so this never collides
+# with another Postgres already running on the machine.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: transient-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: transient
+      POSTGRES_PASSWORD: transient
+      POSTGRES_DB: transient
+    ports:
+      - "5544:5432"
+    volumes:
+      - transient-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U transient -d transient"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # S3-compatible storage. Only needed when STORAGE_DRIVER=s3; the default
+  # local driver writes to ./.data/uploads and needs no container at all.
+  minio:
+    image: minio/minio:latest
+    container_name: transient-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: transient
+      MINIO_ROOT_PASSWORD: transient123
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # web console
+    volumes:
+      - transient-miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Creates the bucket once MinIO is healthy, then exits.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 transient transient123 &&
+      mc mb --ignore-existing local/transient &&
+      echo 'bucket ready'
+      "
+
+volumes:
+  transient-pgdata:
+  transient-miniodata:

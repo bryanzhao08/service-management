@@ -1,0 +1,322 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   Transient design tokens
+   --------------------------------------------------------------------------
+   Section 6.1 of the spec fixes the palette. These ten colors, plus pure
+   white for light-theme surfaces and black/white at low alpha for shadows
+   and overlays, are the only colors permitted anywhere in the product.
+
+   Every text/background pairing used in the app is enumerated in
+   docs/contrast.md and verified by `pnpm contrast`, which computes the real
+   WCAG 2.2 ratio and exits non-zero if any pairing falls below AA.
+   ========================================================================== */
+
+@theme {
+  /* --- Palette (section 6.1) --- */
+  --color-ink: #030701; /* near-black with a green cast; night canvas */
+  --color-cream: #f7ffd7; /* pale lime cream; text on dark, light canvas */
+  --color-lime: #76d337; /* bright signal green; primary action */
+  --color-forest: #116906; /* deep green; pressed, light-theme primary */
+  --color-olive: #76862d; /* muted olive; secondary actions, borders */
+  --color-ember: #df6d1c; /* orange; attention, incidents, warnings */
+  --color-bark: #322f27; /* warm dark gray; cards and surfaces on dark */
+  --color-khaki: #aeaa79; /* muted text, metadata, dividers on dark */
+  --color-copper: #996227; /* burnt brown; destructive, bounced, failed */
+  --color-slate: #4a555d; /* cool gray; borders, disabled, light muted text */
+
+  /* --- Shape (section 6.3) --- */
+  --radius-card: 12px;
+  --radius-sheet: 16px;
+  --radius-pill: 999px;
+
+  /* --- Type --- */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* --- Motion (section 6.3) --- */
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* --- Thumb-reach tap targets (principle 1: minimum 48x48) --- */
+  --spacing-tap: 48px;
+
+  /* --- Animation (section 6.3: 150-200ms, ease-out, no bounce) --- */
+  --animate-fade-in: fade-in 150ms var(--ease-out-soft);
+  --animate-fade-out: fade-out 150ms ease-in;
+  --animate-slide-up: slide-up 200ms var(--ease-out-soft);
+  --animate-slide-down: slide-down 150ms ease-in;
+  --animate-toast-in: toast-in 200ms var(--ease-out-soft);
+  --animate-toast-out: toast-out 150ms ease-in;
+  --animate-shimmer: shimmer 1.4s linear infinite;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes fade-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes slide-up {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  @keyframes slide-down {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(100%);
+    }
+  }
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(-0.5rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes toast-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-0.5rem);
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: -180% 0;
+    }
+    to {
+      background-position: 180% 0;
+    }
+  }
+}
+
+/* ==========================================================================
+   Semantic tokens (section 6.2)
+   --------------------------------------------------------------------------
+   The app defaults to dark: the guard works nights. Light is opt-in from
+   settings. `.theme-light` / `.theme-dark` are set explicitly on <html> so a
+   stored preference always wins; `system` resolves to one of them at runtime.
+   ========================================================================== */
+
+:root,
+.theme-dark {
+  color-scheme: dark;
+
+  --bg: var(--color-ink);
+  --surface: var(--color-bark);
+  --surface-raised: var(--color-bark);
+  --text: var(--color-cream);
+  --text-muted: var(--color-khaki);
+  --border: var(--color-slate);
+
+  --primary: var(--color-lime);
+  --on-primary: var(--color-ink);
+  --primary-pressed: var(--color-forest);
+  --on-primary-pressed: var(--color-cream);
+
+  --secondary: var(--color-olive);
+  --on-secondary: var(--color-ink);
+
+  --attention: var(--color-ember);
+  --on-attention: var(--color-ink);
+
+  --danger: var(--color-copper);
+  --on-danger: var(--color-cream);
+
+  --focus-ring: var(--color-lime);
+
+  /* Elevation on dark is a 1px border, never a shadow (section 6.3). */
+  --elevation: none;
+  --overlay: rgb(3 7 1 / 0.72);
+}
+
+.theme-light {
+  color-scheme: light;
+
+  --bg: var(--color-cream);
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --text: var(--color-ink);
+  --text-muted: var(--color-slate);
+  --border: var(--color-khaki);
+
+  --primary: var(--color-forest);
+  --on-primary: var(--color-cream);
+  --primary-pressed: var(--color-ink);
+  --on-primary-pressed: var(--color-cream);
+
+  --secondary: var(--color-olive);
+  --on-secondary: var(--color-ink);
+
+  --attention: var(--color-ember);
+  --on-attention: var(--color-ink);
+
+  --danger: var(--color-copper);
+  --on-danger: var(--color-cream);
+
+  /* lime on cream is 1.8:1 and fails the 3:1 floor for non-text UI, so the
+     light-theme focus ring is forest. Recorded in ASSUMPTIONS.md. */
+  --focus-ring: var(--color-forest);
+
+  --elevation: 0 1px 2px rgb(3 7 1 / 0.08), 0 4px 12px rgb(3 7 1 / 0.06);
+  --overlay: rgb(3 7 1 / 0.4);
+}
+
+/* Expose the semantic layer to Tailwind. `inline` keeps the generated
+   utilities pointing at the variable rather than copying its value, so
+   `bg-surface` follows the theme instead of freezing at build time. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-primary-pressed: var(--primary-pressed);
+  --color-on-primary-pressed: var(--on-primary-pressed);
+  --color-secondary: var(--secondary);
+  --color-on-secondary: var(--on-secondary);
+  --color-attention: var(--attention);
+  --color-on-attention: var(--on-attention);
+  --color-danger: var(--danger);
+  --color-on-danger: var(--on-danger);
+  --color-focus-ring: var(--focus-ring);
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.5;
+    /* Guards work in the dark; never let iOS bounce reveal a white gutter. */
+    overscroll-behavior-y: none;
+  }
+
+  /* "Larger text" in settings (section 9.10). */
+  .text-larger body,
+  body.text-larger {
+    font-size: 17px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+  }
+
+  /* Timestamps and counters line up in columns (section 6.3). */
+  time,
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  /* One visible focus treatment everywhere, keyboard-only. */
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background-color: var(--primary);
+    color: var(--on-primary);
+  }
+
+  /* Inputs inherit the app font instead of the UA default. */
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+@layer utilities {
+  /* Bottom-third primary actions must clear the iOS home indicator. */
+  .pb-safe {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .pt-safe {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+  }
+
+  .elevation {
+    box-shadow: var(--elevation);
+  }
+
+  /*
+   * Principle 1 sets a hard 48x48 floor on tap targets, but some controls are
+   * meaningfully smaller than that by design: a switch pill, a checkbox, the
+   * remove badge on a photo thumbnail. Scaling the visual to 48px would make
+   * the UI look like a toy.
+   *
+   * So the *target* grows and the *visual* does not. A transparent
+   * pseudo-element is centred on the control and stretched to 48px in each
+   * axis, or to the control's own size if it is already larger. WCAG 2.5.5
+   * measures the target, which is what the pointer actually hits, so this
+   * satisfies it honestly rather than by reinterpreting the rule.
+   *
+   * Cost: the invisible area can overlap a neighbour. Only apply this where
+   * the surrounding region is inert (a label, a photo tile), never where it
+   * would steal a tap from another control. The element must carry its own
+   * positioning class (`relative` or `absolute`); this utility deliberately
+   * does not set one, so it cannot fight the caller over it.
+   */
+  .tap-target::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--spacing-tap));
+    height: max(100%, var(--spacing-tap));
+    transform: translate(-50%, -50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
