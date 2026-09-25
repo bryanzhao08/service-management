@@ -8,10 +8,7 @@ import { requestMagicLink, type SignInState } from "./actions";
 const INITIAL: SignInState = { error: null };
 
 export function SignInForm({ from }: { from: string }) {
-  const [state, formAction, pending] = useActionState(
-    requestMagicLink,
-    INITIAL,
-  );
+  const [state, formAction, pending] = useActionState(requestMagicLink, INITIAL);
 
   return (
     <form action={formAction} className="space-y-6">

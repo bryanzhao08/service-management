@@ -25,9 +25,7 @@ export default async function DashboardPage() {
   return (
     <main className="mx-auto w-full max-w-2xl space-y-6 px-6 py-10">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold text-text">
-          {me?.name ?? "Signed in"}
-        </h1>
+        <h1 className="text-2xl font-semibold text-text">{me?.name ?? "Signed in"}</h1>
         <p className="text-sm text-text-muted">
           {actor.role.toLowerCase()} · {sites.length}{" "}
           {sites.length === 1 ? "site" : "sites"}
@@ -43,9 +41,7 @@ export default async function DashboardPage() {
             {sites.map((site) => (
               <li key={site.id} className="flex justify-between py-3">
                 <span className="text-text">{site.name}</span>
-                <span className="font-mono text-sm text-text-muted">
-                  {site.code}
-                </span>
+                <span className="font-mono text-sm text-text-muted">{site.code}</span>
               </li>
             ))}
           </ul>

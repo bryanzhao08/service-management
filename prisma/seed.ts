@@ -1,11 +1,7 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
-import {
-  LoggingMode,
-  RecipientStatus,
-  Role,
-} from "../src/generated/prisma/enums";
+import { LoggingMode, RecipientStatus, Role } from "../src/generated/prisma/enums";
 
 /**
  * Seed — section 20. Users, sites and configuration only.
@@ -127,7 +123,10 @@ async function main() {
   ]);
 
   await upsertBlindSpots(hotel.id, [
-    ["Garage P2 southwest corner", "Behind the support column, out of camera 14's arc."],
+    [
+      "Garage P2 southwest corner",
+      "Behind the support column, out of camera 14's arc.",
+    ],
     ["Loading dock alcove", "Recessed doorway left of the roll-up door."],
     ["Stairwell A landing 3", "Landing between floors 3 and 4; no camera coverage."],
     ["Stairwell B roof door", "Alarmed door at the top of Stairwell B."],

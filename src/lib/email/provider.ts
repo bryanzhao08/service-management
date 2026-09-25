@@ -59,9 +59,7 @@ export class ConsoleEmailProvider implements EmailProvider {
     ]);
 
     if (process.env.NODE_ENV !== "test") {
-      console.info(
-        `[email] ${message.subject} -> ${message.to}  (${stem}.html)`,
-      );
+      console.info(`[email] ${message.subject} -> ${message.to}  (${stem}.html)`);
     }
 
     return { messageId, provider: "console" };

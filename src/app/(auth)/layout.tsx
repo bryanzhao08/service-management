@@ -6,11 +6,7 @@ import { Wordmark } from "@/components/brand";
  * else on screen — these are the only three places in the app where the user
  * has no session, so there is no nav to render and nothing to be distracted by.
  */
-export default function AuthLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col bg-bg">
       <header className="flex items-center justify-center px-6 pt-10 pb-2">

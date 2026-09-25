@@ -98,7 +98,11 @@ try {
   // Control: if this updates 0 rows the fixture is missing and every check
   // below would be measuring the wrong user.
   const cleared = await resetPin();
-  check("the seeded guard exists and their PIN was cleared", cleared === 1, `${cleared} row(s)`);
+  check(
+    "the seeded guard exists and their PIN was cleared",
+    cleared === 1,
+    `${cleared} row(s)`,
+  );
 
   // ---- 1. The gate ---------------------------------------------------------
   {
@@ -130,11 +134,7 @@ try {
     await requestLink(page, UNKNOWN_EMAIL);
     const url = page.url();
     const sent = await outboxFiles();
-    check(
-      "an unknown address lands on the same verify page",
-      onVerifyPage(url),
-      url,
-    );
+    check("an unknown address lands on the same verify page", onVerifyPage(url), url);
     check(
       "and no email is sent for it",
       sent.length === 0,
@@ -151,7 +151,11 @@ try {
   check("a known address lands on verify", onVerifyPage(page.url()), page.url());
 
   const files = await outboxFiles();
-  check("exactly one email was written to the outbox", files.length === 1, files.join(","));
+  check(
+    "exactly one email was written to the outbox",
+    files.length === 1,
+    files.join(","),
+  );
 
   const link = await latestMagicLink();
   check("the email contains a callback link", Boolean(link), link ?? "none");
@@ -182,7 +186,11 @@ try {
     );
 
     const heading = (await page.locator("h1").first().textContent()) ?? "";
-    check("a user with no PIN is offered to set one", /set a pin/i.test(heading), heading);
+    check(
+      "a user with no PIN is offered to set one",
+      /set a pin/i.test(heading),
+      heading,
+    );
 
     await page.fill('input[name="pin"]', PIN);
     await page.fill('input[name="confirm"]', PIN);
@@ -190,18 +198,38 @@ try {
       page.waitForURL(/\/dashboard/, { timeout: 15_000 }),
       page.click('button[type="submit"]'),
     ]);
-    check("setting the PIN unlocks and lands on the dashboard", page.url().includes("/dashboard"), page.url());
+    check(
+      "setting the PIN unlocks and lands on the dashboard",
+      page.url().includes("/dashboard"),
+      page.url(),
+    );
 
     const unlock = (await ctx.cookies()).find((c) => c.name === "transient_unlock");
-    check("the unlock cookie is httpOnly", unlock?.httpOnly === true, JSON.stringify(unlock ?? null));
+    check(
+      "the unlock cookie is httpOnly",
+      unlock?.httpOnly === true,
+      JSON.stringify(unlock ?? null),
+    );
   }
 
   // ---- 5. Scoped data actually rendered ------------------------------------
   {
     const body = (await page.locator("main").innerText()).replace(/\s+/g, " ");
-    check("the dashboard renders the seeded guard's name", /Terrence Boyd/.test(body), body.slice(0, 160));
-    check("and both of their assigned sites", /Westside Hotel/.test(body) && /Hillcrest/.test(body), body.slice(0, 200));
-    check("and no site they are not assigned to", !/alpha site|bravo site/.test(body), body.slice(0, 200));
+    check(
+      "the dashboard renders the seeded guard's name",
+      /Terrence Boyd/.test(body),
+      body.slice(0, 160),
+    );
+    check(
+      "and both of their assigned sites",
+      /Westside Hotel/.test(body) && /Hillcrest/.test(body),
+      body.slice(0, 200),
+    );
+    check(
+      "and no site they are not assigned to",
+      !/alpha site|bravo site/.test(body),
+      body.slice(0, 200),
+    );
   }
 
   // ---- 6. Lock survives a fresh context ------------------------------------
@@ -215,16 +243,29 @@ try {
     await fresh.addCookies(sessionCookie);
     const p2 = await fresh.newPage();
     await p2.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
-    check("a session without the unlock cookie is re-locked", p2.url().includes("/pin"), p2.url());
+    check(
+      "a session without the unlock cookie is re-locked",
+      p2.url().includes("/pin"),
+      p2.url(),
+    );
 
     const h = (await p2.locator("h1").first().textContent()) ?? "";
-    check("and is now asked to enter the PIN, not set one", /enter your pin/i.test(h), h);
+    check(
+      "and is now asked to enter the PIN, not set one",
+      /enter your pin/i.test(h),
+      h,
+    );
 
     await p2.fill('input[name="pin"]', "9999");
     await p2.click('button[type="submit"]');
     await p2.waitForTimeout(1500);
-    const err = (await p2.locator('[role="alert"], [id$="-error"]').first().textContent()) ?? "";
-    check("a wrong PIN is refused with a remaining-tries message", /incorrect pin/i.test(err), err.trim());
+    const err =
+      (await p2.locator('[role="alert"], [id$="-error"]').first().textContent()) ?? "";
+    check(
+      "a wrong PIN is refused with a remaining-tries message",
+      /incorrect pin/i.test(err),
+      err.trim(),
+    );
     check("and does not reach the dashboard", p2.url().includes("/pin"), p2.url());
 
     await fresh.close();

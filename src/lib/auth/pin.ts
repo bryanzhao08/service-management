@@ -17,9 +17,7 @@ import { findPinHash, setPinHash } from "@/lib/db/auth-adapter";
  * user's own id.
  */
 
-export const pinSchema = z
-  .string()
-  .regex(/^\d{4,6}$/, "PIN must be 4 to 6 digits");
+export const pinSchema = z.string().regex(/^\d{4,6}$/, "PIN must be 4 to 6 digits");
 
 /** OWASP's argon2id baseline; ~19 MiB and a few ms on a modern server. */
 const ARGON2_OPTIONS = {
@@ -45,10 +43,7 @@ export async function clearPin(userId: string): Promise<void> {
  * cases are deliberately indistinguishable to the caller so the unlock screen
  * cannot be used to probe account state.
  */
-export async function verifyPin(
-  userId: string,
-  pin: string,
-): Promise<boolean> {
+export async function verifyPin(userId: string, pin: string): Promise<boolean> {
   const parsed = pinSchema.safeParse(pin);
   if (!parsed.success) return false;
 
