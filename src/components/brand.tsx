@@ -22,8 +22,15 @@ export function Wordmark({
 }) {
   return (
     <span
-      role="img"
-      aria-label={title}
+      // Same decorative rule as Mark: an empty title means the caller has
+      // already named the thing (usually on a wrapping link), so this must
+      // leave the accessibility tree rather than sit in it as an image with an
+      // empty name. Leaving it as role="img" aria-label="" also exposes the
+      // dotless-U+0131 glyphs as visible text under a differently-worded
+      // ancestor label, which is the label-content-name-mismatch failure.
+      {...(title === ""
+        ? { "aria-hidden": true as const }
+        : { role: "img", "aria-label": title })}
       className={cn(
         "inline-flex items-baseline font-semibold tracking-[-0.03em] whitespace-nowrap",
         // leading-none makes the inline-block's box a known 1em, so the dot's
@@ -74,11 +81,20 @@ export function Mark({
 }) {
   const plate = inverted ? "#f7ffd7" : "#030701";
   const dot = inverted ? "#116906" : "#76d337";
+
+  // An empty title means decorative — the mark is sitting next to the wordmark,
+  // which already carries the name. Rendering `role="img" aria-label=""` in
+  // that case produces an UNNAMED image, which a screen reader announces as a
+  // bare "image" and which axe's svg-img-alt flags. Decorative means removing
+  // it from the tree entirely, not naming it with an empty string.
+  const decorative = title === "";
+
   return (
     <svg
       viewBox="0 0 64 64"
-      role="img"
-      aria-label={title}
+      {...(decorative
+        ? { "aria-hidden": true as const, focusable: false }
+        : { role: "img", "aria-label": title })}
       className={cn("h-8 w-8", className)}
     >
       <rect width="64" height="64" rx="15" fill={plate} />

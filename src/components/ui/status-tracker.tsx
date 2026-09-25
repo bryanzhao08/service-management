@@ -38,9 +38,12 @@ const STATE_STYLE: Record<TrackerState, string> = {
  */
 export function StatusTracker({
   steps,
+  timeZone,
   className,
 }: {
   steps: readonly TrackerStep[];
+  /** IANA zone to render times in. See the note on `Timeline`. */
+  timeZone?: string;
   className?: string;
 }) {
   return (
@@ -106,6 +109,7 @@ export function StatusTracker({
                     day: "numeric",
                     hour: "2-digit",
                     minute: "2-digit",
+                    timeZone,
                   })}
                 </time>
               ) : null}

@@ -17,13 +17,19 @@ import { authConfig } from "@/lib/auth/config";
 const { auth } = NextAuth(authConfig);
 
 /** Reachable with no session. Everything else requires one. */
-const PUBLIC_PATHS = ["/", "/sign-in", "/verify", "/privacy", "/terms"];
+const PUBLIC_PATHS = [
+  "/",
+  "/sign-in",
+  "/verify",
+  "/privacy",
+  "/terms",
+  "/sample-report",
+];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
 
-  const isPublic =
-    PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/dev/");
+  const isPublic = PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/dev/");
 
   if (!req.auth && !isPublic) {
     const url = new URL("/sign-in", req.nextUrl.origin);

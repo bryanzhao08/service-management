@@ -29,9 +29,20 @@ const DOT_TONE = {
  */
 export function Timeline({
   entries,
+  timeZone,
   className,
 }: {
   entries: readonly TimelineEntry[];
+  /**
+   * IANA zone to render times in, normally the site's `Site.timezone`.
+   *
+   * Without this, times render in whatever zone the *renderer* is in — the
+   * build machine for a static page, the server region for a dynamic one. An
+   * ops manager in New York would read a Los Angeles shift three hours off,
+   * and every timestamp on a statically generated page would move with the
+   * deploy environment.
+   */
+  timeZone?: string;
   className?: string;
 }) {
   return (
@@ -78,6 +89,7 @@ export function Timeline({
                   {at.toLocaleTimeString(undefined, {
                     hour: "2-digit",
                     minute: "2-digit",
+                    timeZone,
                   })}
                 </time>
                 <span className="text-[15px] font-medium">{entry.title}</span>
