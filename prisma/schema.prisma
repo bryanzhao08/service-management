@@ -204,15 +204,15 @@ model User {
 // ---------------------------------------------------------------------------
 
 model Site {
-  id        String      @id @default(cuid())
-  companyId String
-  name      String
+  id          String      @id @default(cuid())
+  companyId   String
+  name        String
   /// 2-4 characters, unique per company. Prefixes incident codes (WH-0924-03).
-  code      String
-  address   String
+  code        String
+  address     String
   /// IANA zone. Every "what day is this shift" question is answered here, not
   /// in the server's local time.
-  timezone  String      @default("America/Los_Angeles")
+  timezone    String      @default("America/Los_Angeles")
   loggingMode LoggingMode @default(FULL)
 
   footerDisclaimer String?
@@ -264,18 +264,18 @@ model Area {
 }
 
 model BlindSpot {
-  id               String  @id @default(cuid())
-  siteId           String
-  name             String
-  description      String?
+  id                String  @id @default(cuid())
+  siteId            String
+  name              String
+  description       String?
   /// A reference photo of what this spot should look like, shown to the guard.
-  referenceMediaId String?
+  referenceMediaId  String?
   requiredAtClockIn Boolean @default(true)
-  order            Int     @default(0)
+  order             Int     @default(0)
 
-  site            Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  referenceMedia  Media?           @relation(fields: [referenceMediaId], references: [id], onDelete: SetNull)
-  checks          BlindSpotCheck[]
+  site           Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  referenceMedia Media?           @relation(fields: [referenceMediaId], references: [id], onDelete: SetNull)
+  checks         BlindSpotCheck[]
 
   @@index([siteId])
   @@index([referenceMediaId])
@@ -296,6 +296,7 @@ model SiteEntryType {
 
   site      Site       @relation(fields: [siteId], references: [id], onDelete: Cascade)
   incidents Incident[]
+  entries   Entry[]
 
   @@unique([siteId, key])
   @@index([siteId])
@@ -321,15 +322,15 @@ model ShiftTemplate {
 }
 
 model ReportTemplate {
-  id                  String  @id @default(cuid())
-  siteId              String  @unique
+  id                   String  @id @default(cuid())
+  siteId               String  @unique
   /// Ordered list of `{ key, label, enabled }`.
-  sections            Json
-  headerText          String?
-  maxPhotosPerIncident Int    @default(6)
-  maxPhotosPerEntry   Int     @default(3)
-  embedPhotos         Boolean @default(true)
-  coverPage           Boolean @default(true)
+  sections             Json
+  headerText           String?
+  maxPhotosPerIncident Int     @default(6)
+  maxPhotosPerEntry    Int     @default(3)
+  embedPhotos          Boolean @default(true)
+  coverPage            Boolean @default(true)
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 }
@@ -361,25 +362,25 @@ model Recipient {
 // ---------------------------------------------------------------------------
 
 model Shift {
-  id             String      @id @default(cuid())
-  siteId         String
-  guardId        String
-  templateId     String?
-  scheduledStart DateTime
-  scheduledEnd   DateTime
-  clockInAt      DateTime?
-  clockOutAt     DateTime?
-  status         ShiftStatus @default(SCHEDULED)
-  isEventNight   Boolean     @default(false)
-  summary        String?
-  handoffNote    String?
+  id                 String      @id @default(cuid())
+  siteId             String
+  guardId            String
+  templateId         String?
+  scheduledStart     DateTime
+  scheduledEnd       DateTime
+  clockInAt          DateTime?
+  clockOutAt         DateTime?
+  status             ShiftStatus @default(SCHEDULED)
+  isEventNight       Boolean     @default(false)
+  summary            String?
+  handoffNote        String?
   handoffFromShiftId String?
   endFlowStartedAt   DateTime?
   endFlowCompletedAt DateTime?
   /// Client-generated, so an offline clock-in replayed twice is one shift.
-  clientId       String      @unique
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  clientId           String      @unique
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   site     Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
   guard    User           @relation(fields: [guardId], references: [id], onDelete: Cascade)
@@ -402,41 +403,48 @@ model Shift {
 }
 
 model Entry {
-  id            String    @id @default(cuid())
-  shiftId       String
-  type          EntryType
-  occurredAt    DateTime
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  text          String?
+  id              String    @id @default(cuid())
+  shiftId         String
+  type            EntryType
+  occurredAt      DateTime
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  text            String?
   /// The raw dictation transcript, kept separately from `text` so an edit
   /// never destroys what was actually said.
-  transcriptRaw String?
-  areaId        String?
+  transcriptRaw   String?
+  areaId          String?
   /// Soft delete: a security log that can be silently erased is not a log.
   /// The row stays, the report renders it struck through with the reason.
-  deletedAt     DateTime?
-  deleteReason  String?
-  clientId      String    @unique
+  deletedAt       DateTime?
+  deleteReason    String?
+  clientId        String    @unique
+  /// Which site-configured type a `CUSTOM` entry is (section 9.3's "More >
+  /// custom entry type"). Without this a CUSTOM entry cannot say what it is,
+  /// so it renders as a bare note and is invisible to any per-type report
+  /// section. Nullable because every other `EntryType` is self-describing.
+  siteEntryTypeId String?
 
-  shift       Shift           @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  area        Area?           @relation(fields: [areaId], references: [id], onDelete: SetNull)
-  incident    Incident?
-  packageInfo Package?
-  media       Media[]
-  revisions   EntryRevision[]
+  shift         Shift           @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  area          Area?           @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  siteEntryType SiteEntryType?  @relation(fields: [siteEntryTypeId], references: [id], onDelete: SetNull)
+  incident      Incident?
+  packageInfo   Package?
+  media         Media[]
+  revisions     EntryRevision[]
 
   @@index([shiftId, occurredAt])
   @@index([areaId])
   @@index([type])
+  @@index([siteEntryTypeId])
 }
 
 model EntryRevision {
-  id          String   @id @default(cuid())
-  entryId     String
-  text        String
-  editedById  String
-  editedAt    DateTime @default(now())
+  id         String   @id @default(cuid())
+  entryId    String
+  text       String
+  editedById String
+  editedAt   DateTime @default(now())
 
   entry    Entry @relation(fields: [entryId], references: [id], onDelete: Cascade)
   editedBy User  @relation(fields: [editedById], references: [id], onDelete: Cascade)
@@ -446,17 +454,17 @@ model EntryRevision {
 }
 
 model Incident {
-  id             String         @id @default(cuid())
-  entryId        String         @unique
+  id              String         @id @default(cuid())
+  entryId         String         @unique
   /// Site code + date in the site's timezone + daily sequence, e.g. WH-0924-03.
-  code           String
-  categoryKey    String
+  code            String
+  categoryKey     String
   siteEntryTypeId String?
-  severity       Severity?
-  status         IncidentStatus @default(OPEN)
-  resolvedAt     DateTime?
-  resolutionNote String?
-  ongoingSince   DateTime?
+  severity        Severity?
+  status          IncidentStatus @default(OPEN)
+  resolvedAt      DateTime?
+  resolutionNote  String?
+  ongoingSince    DateTime?
 
   entry         Entry          @relation(fields: [entryId], references: [id], onDelete: Cascade)
   siteEntryType SiteEntryType? @relation(fields: [siteEntryTypeId], references: [id], onDelete: SetNull)
@@ -467,17 +475,17 @@ model Incident {
 }
 
 model Package {
-  id                String    @id @default(cuid())
-  entryId           String    @unique
-  carrier           String?
-  trackingNumber    String?
-  recipientName     String?
-  room              String?
-  deliveredAt       DateTime?
-  deliveredTo       String?
-  signatureMediaId  String?
+  id               String    @id @default(cuid())
+  entryId          String    @unique
+  carrier          String?
+  trackingNumber   String?
+  recipientName    String?
+  room             String?
+  deliveredAt      DateTime?
+  deliveredTo      String?
+  signatureMediaId String?
 
-  entry         Entry  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  entry          Entry  @relation(fields: [entryId], references: [id], onDelete: Cascade)
   signatureMedia Media? @relation(fields: [signatureMediaId], references: [id], onDelete: SetNull)
 
   @@index([signatureMediaId])

@@ -32,6 +32,15 @@ export default auth((req) => {
   const isPublic = PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/dev/");
 
   if (!req.auth && !isPublic) {
+    // An API caller gets a status, not a login page. A 307 to HTML on a fetch
+    // surfaces as "unexpected token <" three layers away from the real cause,
+    // and an upload retry loop would happily replay it forever.
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { error: { code: "UNAUTHENTICATED", message: "Sign in first." } },
+        { status: 401 },
+      );
+    }
     const url = new URL("/sign-in", req.nextUrl.origin);
     // Round-trip the destination so a link into the app lands where it meant to
     // after sign-in. Only the path is carried, never an absolute URL, so it

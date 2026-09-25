@@ -383,3 +383,109 @@ by a link to a generated PDF at milestone 6.
 path that is not in `PUBLIC_PATHS`. `scripts/check-landing.mjs` therefore
 requires exactly 200 on internal links — accepting 3xx would let a typo'd href
 pass as a redirect to the sign-in page.
+
+## Milestone 4 — live shift timeline, sheets, photos
+
+### Sheets remount instead of resetting themselves
+
+Section 9.3 says an entry is stamped with the time the sheet **opened**, not the
+time it saved, so a guard who types slowly does not file a note minutes after
+the thing they are describing. The first version did this with a reset effect
+per sheet. That is both boilerplate and a lint error
+(`react-hooks/set-state-in-effect`), and it is fragile: the effect has to
+remember every field.
+
+`ShiftTimeline` now keeps an open counter per sheet and passes it in the React
+`key`, so opening a sheet is a fresh mount. `useState(() => new Date())` is then
+correct by construction — mount time *is* tap time. The counters are per sheet
+rather than shared so that "More → Package" does not disturb the More sheet's
+identity and it still animates out.
+
+Measured: `occurredAt` landed **26ms** from the recorded open time with a
+deliberate 3s typing delay in between, and **3,078ms** before `createdAt`. The
+second number is the control — if the timestamp were stamped server-side the two
+would be equal and the first assertion would pass for the wrong reason.
+
+### Uploads start before the entry exists
+
+`POST /api/media` accepts `entryId: null` and `createEntry` relinks by
+`mediaIds`. A photo starts uploading the moment it is picked, which means the
+bytes are usually already in storage before the guard has finished typing a
+caption. Losing a caption to a crash is recoverable; losing the picture is not.
+
+`media.attachToEntry` filters on `shiftId` **and** `entryId: null` **and**
+`visible.shift`. Without the `shiftId` clause a caller could name media ids from
+another shift and pull someone else's photos onto their own entry. It uses
+`updateMany`, so a replayed save silently matches nothing instead of failing.
+
+### The storage key is re-derived server-side
+
+The client asks for a presigned URL, uploads, then reports the key it used.
+Trusting that report would let a client that edited the key between presign and
+record end up with a row pointing at another company's object — and every later
+signed GET would honour it, because authorisation happens once at presign.
+`POST /api/media` therefore rebuilds the expected key from the session and the
+request and compares, checks `companyIdFromKey`, and calls `storage().size(key)`
+so a row can never reference bytes that never landed. Both refusals are
+exercised: a foreign prefix is **404**, a phantom object is **409**.
+
+`media.record` upserts on `clientId` with `update: {}` — same reasoning as
+`entry.upsert`. A retry is the same photo, and a replay must never repoint an
+existing row at a different storage key.
+
+### EXIF is parsed by hand, for exactly one tag
+
+`readExifCapturedAt` walks the JPEG APP1 segment and the IFD for tag `0x9003`
+only. A full EXIF library is ~40KB shipped to a phone to answer one question,
+and every other tag is discarded two lines later anyway: the canvas re-encode
+that downscales to 2048px strips the whole EXIF block as a side effect. Proven
+by control — inverting the month offset fails exactly the two date tests and
+nothing else.
+
+The `Media.exif` column is left null this milestone. Capture time is the only
+field anything reads.
+
+### `/api/*` returns 401, not a redirect
+
+`proxy.ts` used to send every unauthenticated request to the HTML sign-in page.
+For a page that is right; for `fetch` it means a caller gets 200 and a login
+form where it expected JSON, which is indistinguishable from success until
+something downstream fails on the shape. API paths now get a JSON 401.
+
+### Deviations
+
+**Barcode scanning and the package signature canvas are deferred.** Section 9.3
+calls both "strongly preferred", not required. The package sheet takes a typed
+tracking number and a typed recipient name today.
+
+**Custom entry types are absent from the More menu.** `SiteEntryType` has no
+discriminator between "incident category" and "custom entry type", and the nine
+seeded rows are the incident categories — surfacing them as free-standing entry
+types would put "Medical" in the menu as if it were a patrol. The schema change
+belongs with section 9.9's entry-types tab.
+
+**A site with no configured entry types cannot log an incident.** Category is
+the one required field, so an unconfigured site leaves the sheet showing "Pick a
+category" with nothing to pick. Found by the gate, which had picked Hillcrest
+Middle School — a seeded site with **zero** entry types, while Westside Hotel
+has ten. The gate now selects a configured site deliberately and says why. The
+product fix (hide Incident, or tell the guard the site is unconfigured) belongs
+with the site-config screen that creates these rows.
+
+### What `scripts/check-shift.mjs` actually proves
+
+41 checks against a real browser, a real build and a real database. Clock-in
+walks the whole wizard, the note timestamp is measured against the open time,
+and a 2400px JPEG is uploaded through the real client path and comes back
+**2048x1536** with the byte count read from storage rather than from the client.
+
+Controls, each of which must fail for the check above it to mean anything: a
+tampered download token is **401**, an anonymous media request is **401**, an
+unknown id is **404 not 403** (403 would confirm the row exists), presign
+refuses a non-media type **415** / an oversized photo **413** / an invisible
+shift **404**, and a user in a second company gets **404** for media they can
+otherwise name exactly.
+
+The axe pass covers the timeline and all four sheets. It is not vacuous:
+removing `aria-label` from the offscreen file input fails **exactly one** check,
+the Photo sheet, and the file restores byte-identical afterwards.
