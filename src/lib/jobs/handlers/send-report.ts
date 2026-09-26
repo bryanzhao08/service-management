@@ -6,9 +6,9 @@ import {
   markDeliveryFailed,
   markDeliverySent,
   markReportSent,
-  recordAudit,
   reportForSend,
 } from "@/lib/db/deliveries";
+import { record as recordAudit } from "@/lib/db/audit";
 import { getEmailProvider, MAX_ATTACHMENT_BYTES } from "@/lib/email/provider";
 import { reportEmail, type ReportEmailIncident } from "@/lib/email/report-email";
 import { storage } from "@/lib/storage/driver";
@@ -209,7 +209,7 @@ export async function sendReport(rawPayload: unknown): Promise<SendReportResult>
 
   await recordAudit({
     companyId: site.companyId,
-    action: "report.sent",
+    action: "report.send",
     entityType: "Report",
     entityId: reportId,
     metadata: { sent, failed, attached: fits, bytes: pdf.byteLength },

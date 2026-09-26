@@ -11,7 +11,17 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   plugins: [react()],
-  resolve: { tsconfigPaths: true },
+  resolve: {
+    tsconfigPaths: true,
+    alias: {
+      // The same stub the main config uses, and for the same reason: this
+      // fixture reaches the db layer, which is `server-only`, and that
+      // package throws outside a React Server Component. It arrived here
+      // when delivery tracking started writing audit events, so the import
+      // is transitive and nothing in this file mentions it.
+      "server-only": new URL("./tests/stubs/server-only.ts", import.meta.url).pathname,
+    },
+  },
   test: {
     name: "fixture",
     environment: "node",

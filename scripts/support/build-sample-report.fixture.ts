@@ -22,7 +22,6 @@ import { expect, it } from "vitest";
 import { PrismaClient } from "@/generated/prisma/client";
 import { LoggingMode, Role, EntryType, Severity } from "@/generated/prisma/enums";
 import { enqueue } from "@/lib/db/jobs";
-import { createReportDraft } from "@/lib/db/reports";
 import { runJobs } from "@/lib/jobs/runner";
 import { storage } from "@/lib/storage/driver";
 import { mediaKey } from "@/lib/storage/keys";
@@ -224,13 +223,19 @@ async function main() {
     });
   }
 
-  const draft = await createReportDraft({ shiftId: shift.id, generatedById: owner.id });
-  await enqueue("GENERATE_REPORT", { reportId: draft.id });
+  // The payload is the shift, not a report id. The handler opens its own
+  // draft, so pre-creating one here and naming it would fork the fixture away
+  // from what the end-of-shift flow actually enqueues, which is the whole
+  // point of building the sample through the real job.
+  await enqueue("GENERATE_REPORT", { shiftId: shift.id, requestedById: owner.id });
   const summary = await runJobs({ limit: 5 });
   if (summary.failed > 0)
     throw new Error(`report job failed: ${JSON.stringify(summary)}`);
 
-  const report = await raw.report.findUniqueOrThrow({ where: { id: draft.id } });
+  const report = await raw.report.findFirstOrThrow({
+    where: { shiftId: shift.id },
+    orderBy: { version: "desc" },
+  });
   if (!report.storageKey) throw new Error("report has no storage key");
 
   const pdf = await storage().get(report.storageKey);

@@ -62,6 +62,7 @@ export function PlanCard({ plan }: { plan: Plan }) {
   const recommended = RECOMMENDED[plan.audience] === plan.id;
   return (
     <Card
+      data-plan={plan.id}
       className={`flex h-full flex-col ${
         recommended ? "border-primary ring-1 ring-primary/25" : ""
       }`}

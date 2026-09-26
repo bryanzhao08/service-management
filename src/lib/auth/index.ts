@@ -5,6 +5,7 @@ import {
   findSessionClaims,
   findSignInUserByEmail,
 } from "@/lib/db/auth-adapter";
+import { record as recordAudit } from "@/lib/db/audit";
 import { getEmailProvider } from "@/lib/email/provider";
 import { magicLinkEmail } from "@/lib/email/templates";
 import { authConfig, MAGIC_LINK_MAX_AGE_SECONDS } from "./config";
@@ -95,6 +96,31 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       token.email = claims.email;
       token.hasPin = claims.pinHash !== null;
       return token;
+    },
+  },
+
+  events: {
+    /**
+     * Section 20 wants sign-in in the audit log.
+     *
+     * An `event` rather than the `signIn` callback above, because the callback
+     * is the access gate: it runs twice per magic link and its return value
+     * decides whether the user gets in. Writing from there would log the
+     * request leg as if it were an entry, and a throw would lock a legitimate
+     * guard out of their own shift. Events fire only after the sign-in has
+     * actually succeeded and their result is discarded.
+     */
+    async signIn({ user }) {
+      if (!user?.id) return;
+      const claims = await findSessionClaims(user.id);
+      if (!claims?.companyId) return;
+      await recordAudit({
+        companyId: claims.companyId,
+        actorId: claims.id,
+        action: "auth.sign_in",
+        entityType: "User",
+        entityId: claims.id,
+      });
     },
   },
 });

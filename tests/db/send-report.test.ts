@@ -284,7 +284,10 @@ describe("sendReport", () => {
     await sendReport({ reportId: report.id });
 
     const events = await raw.auditEvent.findMany({
-      where: { companyId: company.id, action: "report.sent" },
+      // `report.send`, not `report.sent`. Every action in the vocabulary is
+      // the imperative — shift.start, entry.edit, recipient.add — and the
+      // spec's own list says "report generate/send".
+      where: { companyId: company.id, action: "report.send" },
     });
     expect(events).toHaveLength(1);
     expect(events[0]!.entityId).toBe(report.id);

@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { resolveDictationLanguage } from "@/lib/dictation";
+
 /**
  * Section 9.3's press-and-hold dictation.
  *
@@ -125,8 +127,10 @@ export function useDictation(): DictationState {
     }
     ref.current?.abort();
     const recognition = new Ctor();
-    recognition.lang =
-      typeof navigator !== "undefined" ? navigator.language || "en-US" : "en-US";
+    // The guard's saved choice, falling back to the browser locale. Read at
+    // start rather than captured once, so changing it in settings takes
+    // effect on the next press without a reload.
+    recognition.lang = resolveDictationLanguage();
     recognition.continuous = true;
     recognition.interimResults = true;
 

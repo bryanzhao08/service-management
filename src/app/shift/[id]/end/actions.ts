@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requireUnlockedActor } from "@/lib/auth/guards";
+import { record as recordAudit } from "@/lib/db/audit";
 import { enqueue } from "@/lib/db/jobs";
 import { db } from "@/lib/db/scoped";
 import { producesReport } from "@/lib/sites/logging-mode";
@@ -92,6 +93,16 @@ export async function buildReport(shiftId: string): Promise<EndState> {
   if (state?.buildInFlight) return { error: null, ok: true };
 
   await enqueue("GENERATE_REPORT", { shiftId, requestedById: owned.actor!.userId });
+  // Audited here rather than in the handler: the handler runs later on
+  // whichever process picks the job up and has no session, so "who asked for
+  // this report" is only knowable at this point.
+  await recordAudit({
+    companyId: owned.actor!.companyId,
+    actorId: owned.actor!.userId,
+    action: "report.generate",
+    entityType: "Shift",
+    entityId: shiftId,
+  });
   revalidatePath(`/shift/${shiftId}/end`);
   return { error: null, ok: true };
 }
@@ -154,6 +165,14 @@ export async function addOneOffRecipient(
   const added = await addOneOffDelivery(reportId, address);
   if (!added) return { error: "That address is already on this report." };
 
+  await recordAudit({
+    companyId: owned.actor!.companyId,
+    actorId: owned.actor!.userId,
+    action: "recipient.add",
+    entityType: "Report",
+    entityId: reportId,
+    metadata: { email: address, oneOff: true },
+  });
   revalidatePath(`/shift/${shiftId}/end`);
   return { error: null, ok: true };
 }
@@ -181,6 +200,14 @@ export async function clockOut(shiftId: string): Promise<EndState> {
     text: "Clocked out",
   });
   await endEndFlow(shiftId, now);
+  await recordAudit({
+    companyId: owned.actor!.companyId,
+    actorId: owned.actor!.userId,
+    action: "shift.end",
+    entityType: "Shift",
+    entityId: shiftId,
+    at: now,
+  });
 
   revalidatePath(`/shift/${shiftId}`);
   revalidatePath("/dashboard");

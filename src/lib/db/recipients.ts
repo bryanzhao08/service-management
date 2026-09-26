@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import type { RecipientStatus } from "@/generated/prisma/enums";
 import { prisma } from "./client";
+import { record as recordAudit } from "./audit";
 import { visible, type Actor } from "./scoped";
 
 /**
@@ -241,6 +242,14 @@ export async function addRecipient(
     return recipient;
   });
 
+  await recordAudit({
+    companyId: actor.companyId,
+    actorId: actor.userId,
+    action: "recipient.add",
+    entityType: "Recipient",
+    entityId: created.id,
+    metadata: { email, siteId: input.siteId, required: input.required },
+  });
   return { id: created.id };
 }
 
@@ -301,7 +310,7 @@ export async function confirmRecipient(
   if (!token) return null;
   const row = await prisma.recipient.findFirst({
     where: { verifyToken: token },
-    include: { site: { select: { name: true } } },
+    include: { site: { select: { name: true, companyId: true } } },
   });
   if (!row) return null;
 
@@ -321,6 +330,17 @@ export async function confirmRecipient(
       lastBounceAt: null,
       lastBounceReason: null,
     },
+  });
+  await recordAudit({
+    // No actor: the person clicking the confirmation link is the recipient,
+    // who has no account here. A null actorId is the honest answer, and the
+    // viewer renders it as "Recipient" rather than inventing a user.
+    companyId: row.site.companyId,
+    action: "recipient.verify",
+    entityType: "Recipient",
+    entityId: row.id,
+    at: now,
+    metadata: { email: row.email, siteName: row.site.name },
   });
   return { name: row.name, siteName: row.site.name };
 }
@@ -373,10 +393,18 @@ export async function updateRecipient(
 export async function removeRecipient(actor: Actor, id: string): Promise<boolean> {
   const found = await prisma.recipient.findFirst({
     where: { id, ...visible.recipient(actor) },
-    select: { id: true },
+    select: { id: true, email: true, siteId: true },
   });
   if (!found) return false;
   await prisma.recipient.delete({ where: { id } });
+  await recordAudit({
+    companyId: actor.companyId,
+    actorId: actor.userId,
+    action: "recipient.remove",
+    entityType: "Recipient",
+    entityId: id,
+    metadata: { email: found.email, siteId: found.siteId },
+  });
   return true;
 }
 

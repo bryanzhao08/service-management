@@ -215,3 +215,18 @@ export async function galleryCounts(shiftId: string) {
   const videos = rows.find((r) => r.kind === "VIDEO")?._count._all ?? 0;
   return { photos, videos };
 }
+
+/**
+ * Revoke the gallery link (section 20).
+ *
+ * Unscoped on purpose, like everything else in this module: the caller has
+ * already proven visibility through `db(actor).report.findById`. Doing the
+ * permission check here as well would put the same rule in two places, and
+ * the one that drifts is the one nobody reads.
+ */
+export async function clearGalleryToken(reportId: string): Promise<void> {
+  await prisma.report.update({
+    where: { id: reportId },
+    data: { galleryToken: null },
+  });
+}

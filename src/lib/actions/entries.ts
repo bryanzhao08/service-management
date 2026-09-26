@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { EntryType, IncidentStatus, Severity } from "@/generated/prisma/enums";
 import { requireActor } from "@/lib/auth/guards";
+import { record as recordAudit } from "@/lib/db/audit";
 import { NotVisibleError, db } from "@/lib/db/scoped";
 
 /**
@@ -118,6 +119,14 @@ export async function updateEntry(
       editedById: actor.userId,
     });
     revalidatePath(`/shift/${parsed.data.shiftId}`);
+    await recordAudit({
+      companyId: actor.companyId,
+      actorId: actor.userId,
+      action: "entry.edit",
+      entityType: "Entry",
+      entityId: entry.id,
+      metadata: { shiftId: parsed.data.shiftId },
+    });
     return { entryId: entry.id };
   });
 }
@@ -140,7 +149,8 @@ export async function softDeleteEntry(
   if (!parsed.success) {
     return failure("REASON_REQUIRED", "Say why you are removing this.");
   }
-  const scoped = db(await requireActor());
+  const actor = await requireActor();
+  const scoped = db(actor);
 
   return guarded(async () => {
     const entry = await scoped.entry.softDelete({
@@ -148,6 +158,16 @@ export async function softDeleteEntry(
       reason: parsed.data.reason,
     });
     revalidatePath(`/shift/${parsed.data.shiftId}`);
+    await recordAudit({
+      companyId: actor.companyId,
+      actorId: actor.userId,
+      action: "entry.delete",
+      entityType: "Entry",
+      entityId: entry.id,
+      // The reason is the whole point of a soft delete. Storing it here too
+      // means the log answers "why did this disappear" without a second read.
+      metadata: { shiftId: parsed.data.shiftId, reason: parsed.data.reason },
+    });
     return { entryId: entry.id };
   });
 }

@@ -9,6 +9,7 @@ import {
   PropertyCheckResult,
 } from "@/generated/prisma/enums";
 import { requireActor } from "@/lib/auth/guards";
+import { record as recordAudit } from "@/lib/db/audit";
 import { NotVisibleError, db } from "@/lib/db/scoped";
 import { notifyHandoffWaiting } from "@/lib/jobs/notify-shift";
 
@@ -67,7 +68,8 @@ export async function startShift(
 ): Promise<ActionResult<{ shiftId: string; clockInAt: string }>> {
   const parsed = startShiftSchema.safeParse(input);
   if (!parsed.success) return failure("INVALID", "Could not start that shift.");
-  const scoped = db(await requireActor());
+  const actor = await requireActor();
+  const scoped = db(actor);
 
   return guarded(async () => {
     const shift = await scoped.clockIn({
@@ -88,6 +90,14 @@ export async function startShift(
       siteId: shift.siteId,
       incomingGuardId: shift.guardId,
       incomingShiftId: shift.id,
+    });
+    await recordAudit({
+      companyId: actor.companyId,
+      actorId: actor.userId,
+      action: "shift.start",
+      entityType: "Shift",
+      entityId: shift.id,
+      metadata: { siteId: shift.siteId, isEventNight: parsed.data.isEventNight },
     });
     return {
       shiftId: shift.id,

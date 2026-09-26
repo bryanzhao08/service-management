@@ -2,41 +2,70 @@ import type { Metadata } from "next";
 
 import { AppChrome } from "@/components/app-chrome";
 import { PushToggle } from "@/components/push-toggle";
+import { AppearanceSettings } from "@/components/settings/appearance";
+import { ChangePin } from "@/components/settings/change-pin";
+import { DictationLanguageSetting } from "@/components/settings/dictation-language";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUnlockedActor } from "@/lib/auth/guards";
+import { userSettings } from "@/lib/db/settings";
 import { hasSubscription } from "@/lib/db/notifications";
+import type { ThemePreference } from "@/lib/theme";
+
+import { signOutEverywhere } from "./actions";
 
 export const metadata: Metadata = { title: "Settings" };
 
 /**
- * Settings (sections 13 and 18).
+ * Settings (sections 9.10, 13 and 18).
  *
- * Only the notifications section exists at this milestone; the rest arrives in
- * milestone 11. It lives here rather than on the dashboard because the
- * permission prompt must be reachable deliberately: a guard who wants
- * notifications back after denying them once needs somewhere to go, and a
- * dashboard widget they scrolled past is not that.
+ * One screen rather than a settings tree. There are six things to change here
+ * and a guard finds them faster by scrolling than by guessing which submenu
+ * holds "larger text".
  */
 export default async function SettingsPage() {
   const actor = await requireUnlockedActor();
 
-  // Read on the server so the page can say whether *any* device is registered.
-  // The toggle itself can only speak for the browser it is running in, and
-  // those two facts genuinely differ — a guard with the depot tablet
-  // registered and their own phone not should see both.
-  const registeredSomewhere = await hasSubscription(actor.userId);
+  const [user, registeredSomewhere] = await Promise.all([
+    userSettings(actor.userId),
+    // Read on the server so the page can say whether *any* device is
+    // registered. The toggle itself can only speak for the browser it runs in,
+    // and those two facts genuinely differ — a guard with the depot tablet
+    // registered and their own phone not should see both.
+    hasSubscription(actor.userId),
+  ]);
+
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null;
+  const theme = user.theme.toLowerCase() as ThemePreference;
 
   return (
     <>
       <AppChrome />
-      <main className="mx-auto max-w-2xl space-y-6 px-4 pb-16">
+      <main className="mx-auto max-w-2xl space-y-6 px-4 pb-16" data-settings-page>
         <header className="space-y-1">
           <h1 className="text-2xl font-semibold text-text">Settings</h1>
           <p className="text-sm text-text-muted">
-            Notifications are set per device, not per account.
+            Signed in as {user.name} ({user.email}).
           </p>
         </header>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Appearance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AppearanceSettings theme={theme} largeText={user.largeText} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Dictation</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DictationLanguageSetting value={user.dictationLang} />
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
@@ -58,6 +87,61 @@ export default async function SettingsPage() {
                 to a device. The bell still works.
               </p>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Device lock</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChangePin hasPin={user.hasPin} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Your data</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-text-muted">
+              Everything you logged, in full: the text, the times, the site, and
+              anything later edited or deleted. Photos aren&rsquo;t included &mdash;
+              they live in the report and the gallery.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="secondary">
+                <a href="/api/me/export?format=json" data-export-json>
+                  Download JSON
+                </a>
+              </Button>
+              <Button asChild variant="secondary">
+                <a href="/api/me/export?format=csv" data-export-my-csv>
+                  Download CSV
+                </a>
+              </Button>
+            </div>
+            <p className="border-rule border-t pt-4 text-sm text-text-muted">
+              Deleted entries are in the export too, with the reason. Deleting an entry
+              hides it from the report; it doesn&rsquo;t erase what you wrote.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Session</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-text-muted">
+              Signing out clears this device, including the PIN unlock. Your shifts,
+              entries and reports stay where they are.
+            </p>
+            <form action={signOutEverywhere}>
+              <Button type="submit" variant="danger" data-sign-out>
+                Sign out
+              </Button>
+            </form>
           </CardContent>
         </Card>
       </main>

@@ -5,8 +5,9 @@ import { ArrowLeft, FileDown } from "lucide-react";
 
 import { CopyReceiptLink } from "@/components/report/copy-receipt-link";
 import { ReportReceipt } from "@/components/report/report-receipt";
+import { RevokeGallery } from "@/components/report/revoke-gallery";
 import { Button } from "@/components/ui/button";
-import { requireUnlockedActor } from "@/lib/auth/guards";
+import { can, requireUnlockedActor } from "@/lib/auth/guards";
 import { latestReportId, receiptData } from "@/lib/db/receipt";
 import { db } from "@/lib/db/scoped";
 
@@ -88,6 +89,12 @@ export default async function ReportReceiptPage({
       />
 
       <CopyReceiptLink reportId={data.reportId} />
+
+      {can.configureSite(actor) && data.hasGallery && chosen.galleryToken ? (
+        <div className="border-rule border-t pt-4">
+          <RevokeGallery reportId={data.reportId} />
+        </div>
+      ) : null}
     </main>
   );
 }

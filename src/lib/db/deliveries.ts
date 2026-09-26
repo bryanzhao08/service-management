@@ -1,8 +1,7 @@
 import type { DeliveryStatus } from "@/generated/prisma/enums";
 
-import type { Prisma } from "@/generated/prisma/client";
-
 import { prisma } from "./client";
+import { record as recordAudit, type AuditAction } from "./audit";
 
 /**
  * Delivery rows and the audit trail behind them (section 12).
@@ -161,7 +160,7 @@ export async function applyDeliveryWebhook(params: {
 
   await recordAudit({
     companyId: existing.report.shift.site.companyId,
-    action: `delivery.${status.toLowerCase()}`,
+    action: `delivery.${status.toLowerCase()}` as AuditAction,
     entityType: "ReportDelivery",
     entityId: existing.id,
     at,
@@ -223,30 +222,6 @@ export async function requiredRecipientCount(reportId: string): Promise<number> 
     select: { recipient: { select: { required: true } } },
   });
   return rows.filter((r) => r.recipient?.required !== false).length;
-}
-
-export async function recordAudit(params: {
-  companyId: string;
-  actorId?: string | null;
-  action: string;
-  entityType: string;
-  entityId: string;
-  at?: Date;
-  metadata?: Record<string, unknown>;
-}): Promise<void> {
-  await prisma.auditEvent.create({
-    data: {
-      companyId: params.companyId,
-      actorId: params.actorId ?? null,
-      action: params.action,
-      entityType: params.entityType,
-      entityId: params.entityId,
-      ...(params.at ? { at: params.at } : {}),
-      ...(params.metadata
-        ? { metadata: params.metadata as Prisma.InputJsonValue }
-        : {}),
-    },
-  });
 }
 
 /**
