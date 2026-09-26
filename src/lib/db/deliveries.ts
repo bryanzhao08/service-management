@@ -72,22 +72,37 @@ export async function deliveriesForReport(reportId: string) {
  * every address failed". Without it the two are indistinguishable, because a
  * report whose deliveries all failed is still READY with a null `sentAt` --
  * the same row a freshly built report has.
+ *
+ * `failedEmails` exists so the screen can attribute the failure. The badge
+ * beside each recipient otherwise shows that address's *standing* -- whether
+ * it was ever verified -- which does not move when tonight's send fails. Three
+ * green "Verified" chips above "we could not send this to 3 of 3" is accurate
+ * and reads as a contradiction. Lowercased because the badge is matched by
+ * address and the provider does not promise us the casing back.
  */
 export async function deliveryOutcomes(reportId: string): Promise<{
   total: number;
   failed: number;
   sent: number;
+  failedEmails: string[];
 }> {
   // Bounded by the recipients configured for one site plus tonight's one-off
   // CCs, so this is a handful of rows, not a scan.
   const rows = await prisma.reportDelivery.findMany({
     where: { reportId },
-    select: { status: true },
+    select: { status: true, email: true },
   });
+  // BOUNCED rides with FAILED: both mean the report did not reach that person
+  // tonight, which is the only distinction the guard can act on. Per-recipient
+  // detail beyond that belongs on the receipt, not on a phone in a stairwell.
+  const didNotArrive = rows.filter(
+    (row) => row.status === "FAILED" || row.status === "BOUNCED",
+  );
   return {
     total: rows.length,
-    failed: rows.filter((row) => row.status === "FAILED").length,
+    failed: didNotArrive.length,
     sent: rows.filter((row) => row.status === "SENT").length,
+    failedEmails: didNotArrive.map((row) => row.email.toLowerCase()),
   };
 }
 

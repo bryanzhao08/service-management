@@ -68,6 +68,8 @@ type DeliveryOutcomes = {
   total: number;
   failed: number;
   sent: number;
+  /** Lowercased. Which addresses it did not reach tonight, so the badge can say so. */
+  failedEmails: string[];
 };
 
 export function EndOfShiftFlow(props: {
@@ -574,6 +576,13 @@ function SendStep({
 }) {
   const [cc, setCc] = React.useState("");
   const sent = report.sentAt !== null;
+  // Tonight's outcome, keyed by address. Empty until a send has actually run,
+  // so before the first attempt every badge still shows standing.
+  const didNotArrive = React.useMemo(
+    () => new Set(delivery?.failedEmails ?? []),
+    [delivery],
+  );
+  const missed = (email: string) => didNotArrive.has(email.toLowerCase());
 
   return (
     <div className="flex flex-col gap-4">
@@ -595,8 +604,15 @@ function SendStep({
                   Required
                 </Badge>
               ) : null}
-              <Badge tone={RECIPIENT_TONE[recipient.status]} className="shrink-0">
-                {RECIPIENT_LABEL[recipient.status]}
+              <Badge
+                tone={
+                  missed(recipient.email) ? "danger" : RECIPIENT_TONE[recipient.status]
+                }
+                className="shrink-0"
+              >
+                {missed(recipient.email)
+                  ? "Didn't send"
+                  : RECIPIENT_LABEL[recipient.status]}
               </Badge>
             </div>
           ))}
@@ -604,8 +620,8 @@ function SendStep({
           {oneOffs.map((email) => (
             <div key={email} className="flex items-center gap-2 text-sm">
               <span className="min-w-0 flex-1 truncate">{email}</span>
-              <Badge tone="outline" className="shrink-0">
-                CC, tonight only
+              <Badge tone={missed(email) ? "danger" : "outline"} className="shrink-0">
+                {missed(email) ? "Didn't send" : "CC, tonight only"}
               </Badge>
             </div>
           ))}

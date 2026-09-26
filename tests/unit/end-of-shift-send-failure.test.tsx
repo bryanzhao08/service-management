@@ -33,7 +33,14 @@ const REPORT = {
 
 function renderFlow(over: {
   sentAt?: string | null;
-  delivery: { total: number; failed: number; sent: number } | null;
+  oneOffs?: string[];
+  recipientEmail?: string;
+  delivery: {
+    total: number;
+    failed: number;
+    sent: number;
+    failedEmails: string[];
+  } | null;
 }) {
   return render(
     <EndOfShiftFlow
@@ -59,13 +66,13 @@ function renderFlow(over: {
         {
           id: "rec_1",
           name: "Dana Reyes",
-          email: "dana@westside.test",
+          email: over.recipientEmail ?? "dana@westside.test",
           roleLabel: "Property manager",
           required: true,
           status: "VERIFIED",
         },
       ]}
-      oneOffs={[]}
+      oneOffs={over.oneOffs ?? []}
       delivery={over.delivery}
       reports={[{ ...REPORT, sentAt: over.sentAt ?? null }]}
     />,
@@ -73,7 +80,12 @@ function renderFlow(over: {
 }
 
 describe("end of shift, when the send has failed", () => {
-  const FAILED = { total: 3, failed: 3, sent: 0 };
+  const FAILED = {
+    total: 3,
+    failed: 3,
+    sent: 0,
+    failedEmails: ["dana@westside.test"],
+  };
 
   it("does not tell the guard it is safe to clock out", () => {
     renderFlow({ delivery: FAILED });
@@ -108,10 +120,48 @@ describe("end of shift, when the send has failed", () => {
     // names internal services, so it stays server-side.
     expect(document.body.textContent).not.toMatch(/resend|validation_error/i);
   });
+
+  it("stops the recipient badge claiming Verified about an address it missed", () => {
+    renderFlow({ delivery: FAILED });
+    // The badge is the recipient's *standing* -- was this address ever
+    // verified -- which does not move when tonight's send fails. Leaving it
+    // put a green "Verified" chip directly above "we could not send this to
+    // 3 of 3", which is two true statements reading as a contradiction.
+    expect(screen.queryByText(/^Verified$/)).toBeNull();
+    expect(screen.getByText(/didn't send/i)).toBeTruthy();
+  });
+
+  it("marks a one-off CC that did not go out", () => {
+    renderFlow({
+      oneOffs: ["night.desk@westside.test"],
+      delivery: { ...FAILED, failedEmails: ["night.desk@westside.test"] },
+    });
+    expect(screen.queryByText(/CC, tonight only/i)).toBeNull();
+    expect(screen.getByText(/didn't send/i)).toBeTruthy();
+  });
+
+  it("matches the address case-insensitively", () => {
+    // The stored recipient keeps whatever casing someone typed; the delivery
+    // row is lowercased on the way out. A badge that silently stops matching
+    // because of that is worse than no badge.
+    renderFlow({
+      recipientEmail: "Dana@Westside.Test",
+      delivery: { ...FAILED, failedEmails: ["dana@westside.test"] },
+    });
+    expect(screen.getByText(/didn't send/i)).toBeTruthy();
+  });
+
+  it("leaves a recipient who was not in the failure list alone", () => {
+    renderFlow({
+      delivery: { ...FAILED, failedEmails: ["someone.else@westside.test"] },
+    });
+    expect(screen.getByText(/^Verified$/)).toBeTruthy();
+    expect(screen.queryByText(/didn't send/i)).toBeNull();
+  });
 });
 
 describe("end of shift, when the send succeeded", () => {
-  const SENT = { total: 3, failed: 0, sent: 3 };
+  const SENT = { total: 3, failed: 0, sent: 3, failedEmails: [] };
 
   it("restores the reassurance and opens clock-out", () => {
     renderFlow({ sentAt: "2026-03-14T06:12:00.000Z", delivery: SENT });
@@ -129,7 +179,7 @@ describe("end of shift, when the send succeeded", () => {
 });
 
 describe("end of shift, before anyone has pressed send", () => {
-  const UNSENT = { total: 3, failed: 0, sent: 0 };
+  const UNSENT = { total: 3, failed: 0, sent: 0, failedEmails: [] };
 
   it("shows a plain send button and no failure", () => {
     renderFlow({ delivery: UNSENT });
