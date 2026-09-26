@@ -77,21 +77,27 @@ export function DictateField({
       <Button
         variant={dictation.listening ? "danger" : "secondary"}
         size="lg"
-        className="w-full"
+        // `touch-none` is load-bearing, not styling. This button sits inside the
+        // sheet's `overflow-y-auto` body, so without it a thumb that drifts a
+        // few pixels while holding reads as a scroll, the browser claims the
+        // gesture and fires `pointercancel` — and per spec no `pointerup`
+        // follows. That is a held mic that never stops.
+        className="w-full touch-none select-none [-webkit-touch-callout:none]"
         onPointerDown={
           dictation.supported
             ? (event) => {
                 event.preventDefault();
+                // Route the rest of this finger's events here no matter where
+                // it wanders, so release always lands on the button.
+                event.currentTarget.setPointerCapture?.(event.pointerId);
                 dictation.start();
               }
             : undefined
         }
         onPointerUp={dictation.supported ? () => dictation.stop() : undefined}
-        onPointerLeave={
-          dictation.supported && dictation.listening
-            ? () => dictation.stop()
-            : undefined
-        }
+        // The gesture being taken away still ends the recording. Without this
+        // the mic stays live and the label stays on "Listening" forever.
+        onPointerCancel={dictation.supported ? () => dictation.stop() : undefined}
         onClick={dictation.supported ? undefined : () => textareaRef.current?.focus()}
       >
         {dictation.supported ? (
