@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { signIn } from "@/lib/auth";
 import { pinSignInSchema } from "@/lib/auth/pin-sign-in";
+import { safeRedirect } from "@/lib/auth/safe-redirect";
 import { grantUnlock } from "@/lib/auth/unlock";
 import { findSignInUserByEmail } from "@/lib/db/auth-adapter";
 
@@ -22,12 +23,6 @@ export type SignInState = { error: string | null };
  * out who works here, and into a way to tell a real address from a guess.
  */
 const PIN_SIGN_IN_ERROR = "That email and PIN did not match. Try again.";
-
-/** Only a same-site path is ever accepted; `//evil.test` and `https://evil.test` are both refused. */
-function safeRedirect(raw: FormDataEntryValue | null): string {
-  const from = typeof raw === "string" ? raw : "";
-  return from.startsWith("/") && !from.startsWith("//") ? from : "/dashboard";
-}
 
 /**
  * Email + PIN sign-in. Only reachable when `PIN_SIGN_IN_ENABLED` is "1", since
