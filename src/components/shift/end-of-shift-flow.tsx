@@ -40,6 +40,14 @@ const DISCARD_RAW = () => {};
 
 type Step = 1 | 2 | 3 | 4;
 
+/**
+ * How long to keep asking the server whether a background job has landed.
+ * A build is ~5s and a send is ~40s, so this is headroom, not a deadline: it
+ * exists so a job that never finishes cannot leave a phone polling until the
+ * battery dies.
+ */
+const POLL_CEILING_MS = 120_000;
+
 type ReportRow = {
   id: string;
   version: number;
@@ -134,6 +142,7 @@ export function EndOfShiftFlow(props: {
   const [handoffNote, setHandoffNote] = React.useState(props.handoffNote);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [sendArmed, setSendArmed] = React.useState(false);
 
   // The clock this flow is measured from is stamped server-side, in the page
   // render, before any of this mounts. It used to be stamped here in an
@@ -145,13 +154,35 @@ export function EndOfShiftFlow(props: {
   // Step 2 and 3 both wait on a background job. Poll while anything is in
   // flight and stop as soon as it settles, rather than leaving a timer running
   // all night on a phone in someone's pocket.
+  //
+  // `busy` cannot be the send's in-flight signal. `sendReport` returns the
+  // moment the job is queued, long before any address is tried, so `busy` went
+  // false within milliseconds and killed this poll on its first evaluation.
+  // Nothing then refreshed, `sentAt` never arrived client-side, and the screen
+  // sat on step 3 until someone reloaded it by hand -- which reads as a hang,
+  // and invites the second tap. `sendArmed` survives that flip.
+  const sendFailed = (props.delivery?.failed ?? 0) > 0;
   const waitingForBuild = step === 2 && !latest?.ready;
-  const waitingForSend = step === 3 && latest?.sentAt === null && busy;
+  const waitingForSend = step === 3 && sendArmed && latest?.sentAt === null;
   React.useEffect(() => {
     if (!waitingForBuild && !waitingForSend) return;
-    const timer = setInterval(() => router.refresh(), 2_000);
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - startedAt > POLL_CEILING_MS) {
+        clearInterval(timer);
+        return;
+      }
+      router.refresh();
+    }, 2_000);
     return () => clearInterval(timer);
   }, [waitingForBuild, waitingForSend, router]);
+
+  // Hand the guard to step 4 once the send lands. Derived rather than stored:
+  // the condition is exactly the one that already revealed the manual
+  // "Continue to clock out" button, so this changes when step 3 turns over,
+  // never whether. A send that failed leaves `sentAt` null and stays put, with
+  // the retry banner.
+  const current: Step = step === 3 && latest?.sentAt ? 4 : step;
 
   async function run(action: () => Promise<{ error: string | null }>, next?: Step) {
     setBusy(true);
@@ -182,7 +213,7 @@ export function EndOfShiftFlow(props: {
         </div>
       </header>
 
-      <StepRail current={step} sends={sends} />
+      <StepRail current={current} sends={sends} />
 
       {error ? (
         <p
@@ -193,7 +224,7 @@ export function EndOfShiftFlow(props: {
         </p>
       ) : null}
 
-      {step === 1 ? (
+      {current === 1 ? (
         <ReviewStep
           review={props.review}
           summary={summary}
@@ -210,7 +241,7 @@ export function EndOfShiftFlow(props: {
         />
       ) : null}
 
-      {step === 2 && sends ? (
+      {current === 2 && sends ? (
         <GenerateStep
           report={latest}
           busy={busy}
@@ -219,16 +250,18 @@ export function EndOfShiftFlow(props: {
         />
       ) : null}
 
-      {step === 3 && sends && latest ? (
+      {current === 3 && sends && latest ? (
         <SendStep
           shiftId={props.shiftId}
           report={latest}
           recipients={props.recipients}
           oneOffs={props.oneOffs}
           delivery={props.delivery}
-          busy={busy}
-          vapidPublicKey={props.vapidPublicKey}
-          onSend={() => run(() => sendReport(props.shiftId, latest.id))}
+          busy={busy || (waitingForSend && !sendFailed)}
+          onSend={() => {
+            setSendArmed(true);
+            run(() => sendReport(props.shiftId, latest.id));
+          }}
           onAddCc={(email) =>
             run(() => addOneOffRecipient(props.shiftId, latest.id, email))
           }
@@ -236,18 +269,19 @@ export function EndOfShiftFlow(props: {
         />
       ) : null}
 
-      {step === 4 ? (
+      {current === 4 ? (
         <ClockOutStep
           shiftId={props.shiftId}
           done={props.alreadyClockedOut}
           busy={busy}
+          vapidPublicKey={props.vapidPublicKey}
           shiftMs={spanMs(props.clockInAt, props.clockOutAt)}
           endFlowMs={spanMs(props.startedAt, props.clockOutAt)}
           onClockOut={() => run(() => clockOut(props.shiftId))}
         />
       ) : null}
 
-      {step >= 3 && sends ? (
+      {current >= 3 && sends ? (
         latest?.sentAt || props.alreadyClockedOut ? (
           <p className="text-center text-sm text-text-muted">
             It&rsquo;s safe to clock out. We&rsquo;ll push a notification when
@@ -558,7 +592,6 @@ function SendStep({
   oneOffs,
   delivery,
   busy,
-  vapidPublicKey,
   onSend,
   onAddCc,
   onNext,
@@ -569,7 +602,6 @@ function SendStep({
   oneOffs: string[];
   delivery: DeliveryOutcomes | null;
   busy: boolean;
-  vapidPublicKey: string | null;
   onSend: () => void;
   onAddCc: (email: string) => void;
   onNext: () => void;
@@ -670,15 +702,12 @@ function SendStep({
       ) : null}
 
       {sent ? (
-        <>
-          {/* Section 13's one-time ask, at the only moment a guard has a
-              reason to say yes: they just sent it and want to know it
-              landed. */}
-          <PushPrompt publicKey={vapidPublicKey} />
-          <Button size="lg" onClick={onNext} className="w-full">
-            Continue to clock out
-          </Button>
-        </>
+        /* Reached only if the auto-advance has not run yet -- the flow moves
+           itself to step 4 the moment `sentAt` lands. Kept as the manual way
+           through so a guard is never stranded if that effect does not fire. */
+        <Button size="lg" onClick={onNext} className="w-full">
+          Continue to clock out
+        </Button>
       ) : (
         <Button size="lg" onClick={onSend} busy={busy} className="w-full">
           <Send className="size-4" aria-hidden="true" />
@@ -695,6 +724,7 @@ function ClockOutStep({
   busy,
   shiftMs,
   endFlowMs,
+  vapidPublicKey,
   onClockOut,
 }: {
   shiftId: string;
@@ -702,6 +732,7 @@ function ClockOutStep({
   busy: boolean;
   shiftMs: number | null;
   endFlowMs: number | null;
+  vapidPublicKey: string | null;
   onClockOut: () => void;
 }) {
   if (done) {
@@ -753,6 +784,11 @@ function ClockOutStep({
         <p className="text-sm text-text-muted">
           This closes the shift and writes the last entry on the timeline.
         </p>
+        {/* Section 13's one-time ask. It used to sit on step 3 behind the
+            manual "Continue" button; now that the flow advances itself once
+            the report lands, this is the last interactive moment a guard has,
+            and the one where "tell me it arrived" is the obvious yes. */}
+        <PushPrompt publicKey={vapidPublicKey} />
         <Button size="lg" onClick={onClockOut} busy={busy} className="w-full">
           Clock out
         </Button>
