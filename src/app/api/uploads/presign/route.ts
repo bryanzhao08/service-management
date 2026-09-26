@@ -94,10 +94,14 @@ export async function POST(request: Request): Promise<Response> {
   const presigned = await storage().presignUpload({
     key,
     contentType,
-    // Sign the caller's declared size, not the ceiling: a token minted for a
-    // 400 KB photo cannot then be used to push 12 MB. A small slack covers
-    // multipart/encoding overhead without opening that up meaningfully.
-    maxBytes: Math.min(maxBytes, bytes + 4096),
+    // The caller's declared size, exactly. It is signed as `Content-Length`,
+    // so the browser must send precisely this many bytes: a token minted for
+    // a 400 KB photo cannot be used to push 12 MB, and it cannot be used to
+    // push 399 KB either. Do NOT add slack for "encoding overhead" -- a raw
+    // PUT of a Blob has none, and any mismatch fails the SigV4 signature
+    // rather than a size check, so the upload 403s while this route still
+    // answers 200.
+    contentLength: bytes,
   });
 
   return NextResponse.json({

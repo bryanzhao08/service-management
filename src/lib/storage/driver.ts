@@ -50,11 +50,23 @@ export type InlineType = "image/jpeg" | "application/pdf";
 export interface StorageDriver {
   readonly name: "local" | "s3";
 
-  /** A URL the *browser* may upload one object to, bounded by type and size. */
+  /**
+   * A URL the *browser* may upload one object to, bounded by type and size.
+   *
+   * `contentLength` is the EXACT byte count the browser will send, not a
+   * ceiling. The S3 driver signs it into the URL, and SigV4 puts
+   * `content-length` in `X-Amz-SignedHeaders`, so a PUT whose body is any
+   * other length fails with `SignatureDoesNotMatch` rather than with a size
+   * error. Adding slack here does not loosen a limit, it breaks every upload.
+   * That is not hypothetical: a `bytes + 4096` "allowance for overhead" made
+   * the PUT 403 on every photo in production while presign itself answered
+   * 200, so the app reported "the photo failed to upload" with nothing in its
+   * own logs.
+   */
   presignUpload(input: {
     key: string;
     contentType: string;
-    maxBytes: number;
+    contentLength: number;
     ttlSeconds?: number;
   }): Promise<PresignedUpload>;
 
@@ -115,16 +127,19 @@ class LocalStorageDriver implements StorageDriver {
   async presignUpload({
     key,
     contentType,
-    maxBytes,
+    contentLength,
     ttlSeconds = DEFAULT_UPLOAD_TTL_SECONDS,
   }: {
     key: string;
     contentType: string;
-    maxBytes: number;
+    contentLength: number;
     ttlSeconds?: number;
   }): Promise<PresignedUpload> {
     const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
-    const token = signUploadToken({ key, contentType, maxBytes, exp });
+    // The local route checks `byteLength > maxBytes`, so the exact length is
+    // simply the tightest ceiling it can be handed, and the two drivers stay
+    // interchangeable.
+    const token = signUploadToken({ key, contentType, maxBytes: contentLength, exp });
     return {
       // App-relative on purpose. An absolute URL built from an env var is how
       // uploads start failing on a preview deployment whose host differs from
@@ -219,12 +234,12 @@ class S3StorageDriver implements StorageDriver {
   async presignUpload({
     key,
     contentType,
-    maxBytes,
+    contentLength,
     ttlSeconds = DEFAULT_UPLOAD_TTL_SECONDS,
   }: {
     key: string;
     contentType: string;
-    maxBytes: number;
+    contentLength: number;
     ttlSeconds?: number;
   }): Promise<PresignedUpload> {
     const url = await getSignedUrl(
@@ -233,9 +248,13 @@ class S3StorageDriver implements StorageDriver {
         Bucket: this.bucket,
         Key: key,
         ContentType: contentType,
-        // Signed, so the browser cannot raise it. S3 rejects a PUT whose
-        // Content-Length differs from the signed value.
-        ContentLength: maxBytes,
+        // Exact, never a ceiling. This lands in `X-Amz-SignedHeaders` as
+        // `content-length`, so the browser has to send this many bytes and no
+        // other number: too few and too many both fail identically, as
+        // `SignatureDoesNotMatch`. That makes it the tightest size control
+        // available here, and also the easiest one to break by "allowing
+        // overhead".
+        ContentLength: contentLength,
       }),
       { expiresIn: ttlSeconds },
     );
