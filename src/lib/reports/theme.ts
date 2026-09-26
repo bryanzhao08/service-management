@@ -91,7 +91,12 @@ export const styles = StyleSheet.create({
   headerTitle: { fontSize: 9, fontWeight: 600 },
   headerMeta: { fontSize: 7.5, color: COLORS.muted },
 
-  h1: { fontSize: 17, fontWeight: 700, color: COLORS.forest, marginBottom: 2 },
+  // `lineHeight` on the page resolves once against the page's own 9pt font, so
+  // every child inherits a fixed ~13pt line box no matter how large its text
+  // is. At 17pt the glyphs need ~20.6pt and the 2pt margin cannot absorb the
+  // difference, so the date underneath was drawn 5.5pt inside the title. A
+  // `lineHeight` set here resolves against this element's fontSize instead.
+  h1: { fontSize: 17, lineHeight: 1.25, fontWeight: 700, color: COLORS.forest, marginBottom: 2 },
   h2: {
     fontSize: 11,
     fontWeight: 600,
