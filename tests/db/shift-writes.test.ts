@@ -551,3 +551,215 @@ describe("handoff", () => {
     expect(incoming.handoffFromShiftId).toBeNull();
   });
 });
+
+/**
+ * `visible.shift` resolves to every shift at a site the actor can see, because
+ * acknowledging a handoff means reading the outgoing guard's shift. That read
+ * rule was doing duty as the write rule on every path except `clockIn`, so a
+ * guard could file, rewrite and strike entries inside a colleague's shift, and
+ * the delivered report names the shift's guard once in the header with no
+ * per-entry author. These pin the write rule on every path that has one.
+ */
+describe("a colleague's shift at the same site is readable, never writable", () => {
+  beforeEach(resetDatabase);
+
+  async function sameSiteColleague() {
+    const a = await createTenant("alpha");
+    const other = await raw.user.create({
+      data: {
+        companyId: a.company.id,
+        email: "colleague@alpha.test",
+        name: "colleague",
+        role: Role.GUARD,
+        assignments: { create: { siteId: a.site.id } },
+      },
+    });
+    const theirShift = await raw.shift.create({
+      data: {
+        siteId: a.site.id,
+        guardId: other.id,
+        clientId: "alpha-colleague-shift",
+        scheduledStart: new Date("2026-02-01T18:00:00.000Z"),
+        scheduledEnd: new Date("2026-02-02T04:00:00.000Z"),
+        clockInAt: new Date("2026-02-01T18:01:00.000Z"),
+        status: ShiftStatus.ACTIVE,
+      },
+    });
+    // The read has to keep working, or the handoff step breaks. Assert it
+    // here so a fix that simply narrows `visible.shift` fails these too.
+    const scoped = db(actorFor(a, Role.GUARD));
+    await expect(scoped.shift.findById(theirShift.id)).resolves.not.toBeNull();
+    return { a, other, theirShift, scoped };
+  }
+
+  it("refuses to file an entry on it", async () => {
+    const { theirShift, scoped } = await sameSiteColleague();
+
+    await expect(
+      scoped.entry.upsert({
+        shiftId: theirShift.id,
+        clientId: "planted-note",
+        type: EntryType.NOTE,
+        occurredAt: new Date("2026-02-01T20:00:00.000Z"),
+        text: "Perimeter clear, nothing seen.",
+      }),
+    ).rejects.toBeInstanceOf(NotVisibleError);
+
+    const entries = await raw.entry.findMany({
+      where: { shiftId: theirShift.id },
+    });
+    expect(entries).toHaveLength(0);
+  });
+
+  it("refuses to rewrite an entry on it", async () => {
+    const { a, other, theirShift, scoped } = await sameSiteColleague();
+    const theirs = await raw.entry.create({
+      data: {
+        shiftId: theirShift.id,
+        clientId: "their-own-note",
+        type: EntryType.NOTE,
+        occurredAt: new Date("2026-02-01T20:00:00.000Z"),
+        text: "Door forced on the north stairwell.",
+      },
+    });
+
+    await expect(
+      scoped.entry.update({
+        id: theirs.id,
+        text: "Nothing to report.",
+        editedById: a.guard.id,
+      }),
+    ).rejects.toBeInstanceOf(NotVisibleError);
+
+    const after = await raw.entry.findUniqueOrThrow({ where: { id: theirs.id } });
+    expect(after.text).toBe("Door forced on the north stairwell.");
+    expect(other.id).toBe(theirShift.guardId);
+  });
+
+  it("refuses to strike an entry off it", async () => {
+    const { theirShift, scoped } = await sameSiteColleague();
+    const theirs = await raw.entry.create({
+      data: {
+        shiftId: theirShift.id,
+        clientId: "their-second-note",
+        type: EntryType.NOTE,
+        occurredAt: new Date("2026-02-01T21:00:00.000Z"),
+        text: "Vehicle parked across the fire lane.",
+      },
+    });
+
+    await expect(
+      scoped.entry.softDelete({ id: theirs.id, reason: "duplicate" }),
+    ).rejects.toBeInstanceOf(NotVisibleError);
+
+    const after = await raw.entry.findUniqueOrThrow({ where: { id: theirs.id } });
+    expect(after.deletedAt).toBeNull();
+  });
+
+  it("refuses to raise an incident on it", async () => {
+    const { theirShift, scoped } = await sameSiteColleague();
+
+    await expect(
+      scoped.incident.create({
+        shiftId: theirShift.id,
+        clientId: "planted-incident",
+        occurredAt: new Date("2026-02-01T22:00:00.000Z"),
+        categoryKey: "SUSPICIOUS_PERSON",
+        text: "Nothing happened.",
+      }),
+    ).rejects.toBeInstanceOf(NotVisibleError);
+
+    expect(
+      await raw.incident.count({ where: { entry: { shiftId: theirShift.id } } }),
+    ).toBe(0);
+  });
+
+  it("refuses to log a package on it", async () => {
+    const { theirShift, scoped } = await sameSiteColleague();
+
+    await expect(
+      scoped.packageInfo.create({
+        shiftId: theirShift.id,
+        clientId: "planted-package",
+        occurredAt: new Date("2026-02-01T22:30:00.000Z"),
+        carrier: "UPS",
+      }),
+    ).rejects.toBeInstanceOf(NotVisibleError);
+
+    expect(await raw.entry.count({ where: { shiftId: theirShift.id } })).toBe(0);
+  });
+
+  it("refuses to submit a property check on it", async () => {
+    const { a, theirShift, scoped } = await sameSiteColleague();
+    const area = await raw.area.create({
+      data: { siteId: a.site.id, name: "Lobby", order: 1 },
+    });
+
+    await expect(
+      scoped.propertyCheck.submit({
+        shiftId: theirShift.id,
+        areaId: area.id,
+        result: PropertyCheckResult.CLEAR,
+      }),
+    ).rejects.toBeInstanceOf(NotVisibleError);
+
+    expect(await raw.propertyCheck.count({ where: { shiftId: theirShift.id } })).toBe(
+      0,
+    );
+  });
+
+  it("refuses to submit a blind spot check on it", async () => {
+    const { a, theirShift, scoped } = await sameSiteColleague();
+    const spot = await raw.blindSpot.create({
+      data: { siteId: a.site.id, name: "Loading dock camera", order: 1 },
+    });
+
+    await expect(
+      scoped.blindSpotCheck.submit({
+        shiftId: theirShift.id,
+        blindSpotId: spot.id,
+        method: BlindSpotMethod.PATROL,
+      }),
+    ).rejects.toBeInstanceOf(NotVisibleError);
+
+    expect(await raw.blindSpotCheck.count({ where: { shiftId: theirShift.id } })).toBe(
+      0,
+    );
+  });
+
+  it("refuses to acknowledge a handoff into it", async () => {
+    const { a, theirShift, scoped } = await sameSiteColleague();
+
+    await expect(
+      scoped.acknowledgeHandoff({
+        shiftId: theirShift.id,
+        fromShiftId: a.shift.id,
+        clientId: "planted-handoff",
+        at: new Date("2026-02-01T18:00:00.000Z"),
+      }),
+    ).rejects.toBeInstanceOf(NotVisibleError);
+
+    const after = await raw.shift.findUniqueOrThrow({ where: { id: theirShift.id } });
+    expect(after.handoffFromShiftId).toBeNull();
+  });
+
+  it("refuses a blind spot verified by somebody outside the company", async () => {
+    const { a } = await sameSiteColleague();
+    const outsider = await createTenant("bravo");
+    const spot = await raw.blindSpot.create({
+      data: { siteId: a.site.id, name: "Rear gate camera", order: 2 },
+    });
+    const scopedOwn = db(actorFor(a, Role.GUARD));
+
+    await expect(
+      scopedOwn.blindSpotCheck.submit({
+        shiftId: a.shift.id,
+        blindSpotId: spot.id,
+        method: BlindSpotMethod.CAMERA_ROOM,
+        verifiedById: outsider.owner.id,
+      }),
+    ).rejects.toBeInstanceOf(NotVisibleError);
+
+    expect(await raw.blindSpotCheck.count({ where: { shiftId: a.shift.id } })).toBe(0);
+  });
+});

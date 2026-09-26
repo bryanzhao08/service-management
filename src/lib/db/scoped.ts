@@ -118,6 +118,35 @@ export function db(actor: Actor) {
    * to. Kept in one place so the entry path and the incident path cannot
    * drift apart.
    */
+  /**
+   * The write rule for a shift, separate from the read rule.
+   *
+   * `visible.shift` is site-scoped on purpose: acknowledging a handoff means
+   * reading the outgoing guard's shift. That makes it the wrong gate for a
+   * write, because at a shared site it resolves to every colleague's live
+   * shift, and the timeline is the evidence record that ends up in a client's
+   * PDF. Until now the ownership rule lived only in `clockIn`, so every other
+   * write path let a guard file, edit or strike entries in a colleague's
+   * report with no attribution anywhere in the document.
+   *
+   * Returning `NotVisibleError` rather than a distinct "not yours" keeps the
+   * 404 convention below: telling someone an id exists but is not theirs
+   * confirms the id.
+   *
+   * The one deliberate cross-guard write is `acknowledgeHandoff`, which puts
+   * `HANDOFF_GIVEN` on the outgoing shift by design. It writes through the
+   * transaction directly and gates the *incoming* shift on ownership instead.
+   */
+  function assertOwnShift<T extends { guardId: string }>(
+    shift: T | null,
+    shiftId: string,
+  ): T {
+    if (!shift || shift.guardId !== actor.userId) {
+      throw new NotVisibleError("shift", shiftId);
+    }
+    return shift;
+  }
+
   async function assertBelongsToSite(
     siteId: string,
     input: { areaId?: string | null; siteEntryTypeId?: string | null },
@@ -414,11 +443,13 @@ export function db(actor: Actor) {
         areaId?: string | null;
         siteEntryTypeId?: string | null;
       }) {
-        const shift = await prisma.shift.findFirst({
-          where: { id: input.shiftId, ...visible.shift(actor) },
-          select: { id: true, siteId: true },
-        });
-        if (!shift) throw new NotVisibleError("shift", input.shiftId);
+        const shift = assertOwnShift(
+          await prisma.shift.findFirst({
+            where: { id: input.shiftId, ...visible.shift(actor) },
+            select: { id: true, siteId: true, guardId: true },
+          }),
+          input.shiftId,
+        );
         await assertBelongsToSite(shift.siteId, input);
 
         const writable = {
@@ -456,9 +487,13 @@ export function db(actor: Actor) {
       async update(input: { id: string; text: string; editedById: string }) {
         const existing = await prisma.entry.findFirst({
           where: { id: input.id, shift: visible.shift(actor) },
-          select: { id: true, text: true },
+          select: { id: true, text: true, shift: { select: { guardId: true } } },
         });
-        if (!existing) throw new NotVisibleError("entry", input.id);
+        // Same split as `assertOwnShift`: readable by the site, writable only
+        // by the guard whose report it is.
+        if (!existing || existing.shift.guardId !== actor.userId) {
+          throw new NotVisibleError("entry", input.id);
+        }
 
         return prisma.$transaction(async (tx) => {
           if (existing.text !== null && existing.text !== input.text) {
@@ -504,9 +539,11 @@ export function db(actor: Actor) {
       async softDelete(input: { id: string; reason: string }) {
         const existing = await prisma.entry.findFirst({
           where: { id: input.id, shift: visible.shift(actor) },
-          select: { id: true },
+          select: { id: true, shift: { select: { guardId: true } } },
         });
-        if (!existing) throw new NotVisibleError("entry", input.id);
+        if (!existing || existing.shift.guardId !== actor.userId) {
+          throw new NotVisibleError("entry", input.id);
+        }
         return prisma.entry.update({
           where: { id: existing.id },
           data: { deletedAt: new Date(), deleteReason: input.reason },
@@ -643,11 +680,13 @@ export function db(actor: Actor) {
         areaId?: string | null;
         status?: IncidentStatus;
       }) {
-        const shift = await prisma.shift.findFirst({
-          where: { id: input.shiftId, ...visible.shift(actor) },
-          include: { site: { select: { id: true, code: true, timezone: true } } },
-        });
-        if (!shift) throw new NotVisibleError("shift", input.shiftId);
+        const shift = assertOwnShift(
+          await prisma.shift.findFirst({
+            where: { id: input.shiftId, ...visible.shift(actor) },
+            include: { site: { select: { id: true, code: true, timezone: true } } },
+          }),
+          input.shiftId,
+        );
         await assertBelongsToSite(shift.site.id, input);
 
         // Replay: the entry already exists, so return its incident rather than
@@ -762,11 +801,13 @@ export function db(actor: Actor) {
         room?: string | null;
         text?: string | null;
       }) {
-        const shift = await prisma.shift.findFirst({
-          where: { id: input.shiftId, ...visible.shift(actor) },
-          select: { id: true },
-        });
-        if (!shift) throw new NotVisibleError("shift", input.shiftId);
+        const shift = assertOwnShift(
+          await prisma.shift.findFirst({
+            where: { id: input.shiftId, ...visible.shift(actor) },
+            select: { id: true, guardId: true },
+          }),
+          input.shiftId,
+        );
 
         const replay = await prisma.entry.findUnique({
           where: { clientId: input.clientId },
@@ -945,29 +986,32 @@ export function db(actor: Actor) {
       const [incoming, outgoing] = await Promise.all([
         prisma.shift.findFirst({
           where: { id: input.shiftId, ...visible.shift(actor) },
-          select: { id: true, siteId: true },
+          select: { id: true, siteId: true, guardId: true },
         }),
         prisma.shift.findFirst({
           where: { id: input.fromShiftId, ...visible.shift(actor) },
           select: { id: true, siteId: true, handoffNote: true },
         }),
       ]);
-      if (!incoming) throw new NotVisibleError("shift", input.shiftId);
+      // Writing `HANDOFF_GIVEN` onto the outgoing guard's shift is the one
+      // designed cross-guard write, so ownership is asserted on the incoming
+      // side instead: you acknowledge your own handoff, not someone else's.
+      const incomingOwned = assertOwnShift(incoming, input.shiftId);
       // Scoped on its own, so naming a shift as a handoff source cannot be
       // used to read one at a site this actor is not assigned to.
-      if (!outgoing || outgoing.siteId !== incoming.siteId) {
+      if (!outgoing || outgoing.siteId !== incomingOwned.siteId) {
         throw new NotVisibleError("shift", input.fromShiftId);
       }
 
       await prisma.$transaction(async (tx) => {
         await tx.shift.update({
-          where: { id: incoming.id },
+          where: { id: incomingOwned.id },
           data: { handoffFromShiftId: outgoing.id },
         });
         await tx.entry.upsert({
           where: { clientId: input.clientId },
           create: {
-            shiftId: incoming.id,
+            shiftId: incomingOwned.id,
             clientId: input.clientId,
             type: EntryType.HANDOFF_RECEIVED,
             occurredAt: input.at,
@@ -1009,11 +1053,13 @@ export function db(actor: Actor) {
         note?: string | null;
         mediaId?: string | null;
       }) {
-        const shift = await prisma.shift.findFirst({
-          where: { id: input.shiftId, ...visible.shift(actor) },
-          select: { id: true, siteId: true },
-        });
-        if (!shift) throw new NotVisibleError("shift", input.shiftId);
+        const shift = assertOwnShift(
+          await prisma.shift.findFirst({
+            where: { id: input.shiftId, ...visible.shift(actor) },
+            select: { id: true, siteId: true, guardId: true },
+          }),
+          input.shiftId,
+        );
         // The area has to belong to *this shift's site*, or a check would be
         // recorded against a place the guard never stood.
         const area = await prisma.area.findFirst({
@@ -1055,16 +1101,30 @@ export function db(actor: Actor) {
         reason?: string | null;
         mediaId?: string | null;
       }) {
-        const shift = await prisma.shift.findFirst({
-          where: { id: input.shiftId, ...visible.shift(actor) },
-          select: { id: true, siteId: true },
-        });
-        if (!shift) throw new NotVisibleError("shift", input.shiftId);
+        const shift = assertOwnShift(
+          await prisma.shift.findFirst({
+            where: { id: input.shiftId, ...visible.shift(actor) },
+            select: { id: true, siteId: true, guardId: true },
+          }),
+          input.shiftId,
+        );
         const spot = await prisma.blindSpot.findFirst({
           where: { id: input.blindSpotId, siteId: shift.siteId },
           select: { id: true },
         });
         if (!spot) throw new NotVisibleError("blindSpot", input.blindSpotId);
+
+        // `verifiedById` is the only field here naming somebody other than the
+        // guard, and it arrives from the client. Unchecked, a skipped blind
+        // spot could be signed off in the name of any user id the caller
+        // happens to know. It has to be a real colleague in this company.
+        if (input.verifiedById) {
+          const verifier = await prisma.user.findFirst({
+            where: { id: input.verifiedById, companyId: actor.companyId },
+            select: { id: true },
+          });
+          if (!verifier) throw new NotVisibleError("user", input.verifiedById);
+        }
 
         const data = {
           method: input.method,
