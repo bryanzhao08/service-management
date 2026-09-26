@@ -13,7 +13,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <Link
           href="/"
           aria-label="Transient home"
-          className="tap-target rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus-ring"
+          className="tap-target relative rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus-ring"
         >
           {/* Wordmark already carries role="img" + aria-label, so the link's
               own label is set above rather than adding a second announcement. */}
