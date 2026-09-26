@@ -9,7 +9,7 @@ import { ChipGroup } from "@/components/ui/chip-group";
 import { Field } from "@/components/ui/input";
 import { BottomSheet, SheetRoot } from "@/components/ui/sheet";
 import { SegmentedControl, Toggle } from "@/components/ui/toggle";
-import { createIncident } from "@/lib/actions/entries";
+import { submitTimelineWrite } from "@/lib/offline/submit";
 import { formatClock } from "@/lib/time";
 
 /**
@@ -57,24 +57,37 @@ export function IncidentSheet({
     setError(null);
     const clientId = crypto.randomUUID();
     try {
-      const result = await createIncident({
-        shiftId,
+      const result = await submitTimelineWrite<{
+        entryId: string;
+        incidentId: string;
+        code: string;
+        status: string;
+      }>({
         clientId,
-        occurredAt: openedAt,
-        categoryKey: category.key,
-        siteEntryTypeId: category.id,
-        severity: severity || undefined,
-        status: ongoing ? "ONGOING" : undefined,
-        text: text.trim() || undefined,
-        transcriptRaw: raw || undefined,
-        areaId: areaId || undefined,
+        label: "incident",
+        envelope: {
+          action: "createIncident",
+          input: {
+            shiftId,
+            clientId,
+            occurredAt: openedAt.toISOString(),
+            categoryKey: category.key,
+            siteEntryTypeId: category.id,
+            severity: severity || undefined,
+            status: ongoing ? "ONGOING" : undefined,
+            text: text.trim() || undefined,
+            transcriptRaw: raw || undefined,
+            areaId: areaId || undefined,
+          },
+        },
       });
-      if (!result.ok) {
+      if (result.status === "rejected") {
         setError(result.message);
         return;
       }
+      const sent = result.status === "sent" ? result.data : null;
       onSaved({
-        id: result.data.entryId,
+        id: sent ? sent.entryId : clientId,
         clientId,
         type: "INCIDENT",
         occurredAt: openedAt.toISOString(),
@@ -84,16 +97,22 @@ export function IncidentSheet({
         revisionCount: 0,
         mediaCount: 0,
         incident: {
-          id: result.data.incidentId,
-          code: result.data.code,
+          id: sent ? sent.incidentId : clientId,
+          // The code is a per-shift sequence the database assigns, so an
+          // offline incident genuinely does not have one yet. Showing a
+          // guessed number would be worse than showing none: the code is what
+          // gets quoted back in a dispute, and a number that changes on sync
+          // is a number nobody can trust.
+          code: sent ? sent.code : "",
           categoryKey: category.key,
           severity: severity || null,
-          status: result.data.status,
+          status: sent ? sent.status : ongoing ? "ONGOING" : "OPEN",
           // The header's live timer reads this, so it has to match the
           // timestamp the server actually stored, not "now".
           ongoingSince: ongoing ? openedAt.toISOString() : null,
         },
         packageInfo: null,
+        pending: result.status === "queued",
       });
       onOpenChange(false);
     } finally {

@@ -71,6 +71,7 @@ export default async function EndOfShiftPage({
     <EndOfShiftFlow
       shiftId={id}
       siteName={data.siteName}
+      vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null}
       timeZone={data.siteTimezone}
       reportMode={capabilities.report}
       alreadyClockedOut={data.clockOutAt !== null}

@@ -10,6 +10,7 @@ import {
 } from "@/generated/prisma/enums";
 import { requireActor } from "@/lib/auth/guards";
 import { NotVisibleError, db } from "@/lib/db/scoped";
+import { notifyHandoffWaiting } from "@/lib/jobs/notify-shift";
 
 /**
  * Shift lifecycle actions (section 16).
@@ -77,6 +78,17 @@ export async function startShift(
     });
     revalidatePath(`/shift/${shift.id}`);
     revalidatePath("/dashboard");
+    // Section 13: tell whoever is still on site that their relief has
+    // arrived. Awaited rather than fired and forgotten, because a promise
+    // left dangling in a serverless request is killed when the response is
+    // sent — the notification would land only when the function happened to
+    // stay warm. It swallows its own errors, so the clock-in cannot fail
+    // here.
+    await notifyHandoffWaiting({
+      siteId: shift.siteId,
+      incomingGuardId: shift.guardId,
+      incomingShiftId: shift.id,
+    });
     return {
       shiftId: shift.id,
       clockInAt: (shift.clockInAt ?? new Date()).toISOString(),

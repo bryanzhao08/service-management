@@ -10,7 +10,15 @@ export default defineConfig({
   // Resolves the "@/*" alias from tsconfig.json. Native since Vite 8, so no
   // vite-tsconfig-paths plugin and no second copy of the alias map that can
   // drift out of sync with tsconfig.
-  resolve: { tsconfigPaths: true },
+  resolve: {
+    tsconfigPaths: true,
+    alias: {
+      // Next aliases this at build time; Vitest does not, so an import of
+      // `lib/push/send` would fail to resolve rather than fail a test. See
+      // tests/stubs/server-only.ts for why stubbing is safe.
+      "server-only": new URL("./tests/stubs/server-only.ts", import.meta.url).pathname,
+    },
+  },
   test: {
     projects: [
       {

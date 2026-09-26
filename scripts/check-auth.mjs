@@ -86,6 +86,22 @@ async function resetPin() {
     'UPDATE "User" SET "pinHash" = NULL WHERE email = $1',
     [GUARD_EMAIL],
   );
+
+  // The site-scoping assertions below read the idle dashboard, which lists the
+  // guard's assigned sites. An open shift replaces that list with the "On
+  // shift" card, so a previous gate that clocked in would make a correct
+  // dashboard look like a scoping failure. Owning the precondition is the fix;
+  // depending on gate order is not.
+  await client.query(
+    `UPDATE "Shift"
+        SET "clockOutAt" = (now() AT TIME ZONE 'UTC'), status = 'ENDED',
+            "updatedAt" = (now() AT TIME ZONE 'UTC')
+      WHERE "clockOutAt" IS NULL
+        AND "clockInAt" IS NOT NULL
+        AND "guardId" = (SELECT id FROM "User" WHERE email = $1)`,
+    [GUARD_EMAIL],
+  );
+
   await client.end();
   return res.rowCount ?? 0;
 }

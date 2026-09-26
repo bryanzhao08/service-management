@@ -58,6 +58,8 @@ export function OfflineBanner({
     <div
       role="status"
       aria-live="polite"
+      data-offline-banner={offline ? "offline" : "syncing"}
+      data-pending-count={pendingCount}
       className={cn(
         "flex items-center gap-2.5 px-4 py-2.5 text-sm",
         offline ? "bg-attention text-on-attention" : "bg-surface text-text-muted",

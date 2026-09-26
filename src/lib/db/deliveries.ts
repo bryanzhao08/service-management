@@ -208,6 +208,23 @@ export async function allRequiredDelivered(reportId: string): Promise<boolean> {
   return required.every((r) => r.status === "DELIVERED");
 }
 
+/**
+ * How many recipients a "delivered to everyone" notification is counting.
+ *
+ * Uses the same required/optional rule as `allRequiredDelivered`, not a count
+ * of every delivery row, so the number in the notification matches the
+ * condition that produced it. Counting all rows here would tell a guard
+ * "delivered to 4 recipients" at the moment three required ones landed and an
+ * optional fourth was still in flight.
+ */
+export async function requiredRecipientCount(reportId: string): Promise<number> {
+  const rows = await prisma.reportDelivery.findMany({
+    where: { reportId },
+    select: { recipient: { select: { required: true } } },
+  });
+  return rows.filter((r) => r.recipient?.required !== false).length;
+}
+
 export async function recordAudit(params: {
   companyId: string;
   actorId?: string | null;

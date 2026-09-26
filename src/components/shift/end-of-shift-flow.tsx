@@ -7,6 +7,7 @@ import * as React from "react";
 
 import { DictateField } from "@/components/shift/dictate-field";
 import { Badge } from "@/components/ui/badge";
+import { PushPrompt } from "@/components/push-prompt";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -83,6 +84,8 @@ export function EndOfShiftFlow(props: {
   handoffNote: string;
   recipients: RecipientRow[];
   oneOffs: string[];
+  /** Null when the deployment has no VAPID keys; the prompt stays hidden. */
+  vapidPublicKey: string | null;
   reports: ReportRow[];
   /**
    * What this site's logging mode permits at the end of a shift. When it is
@@ -199,6 +202,7 @@ export function EndOfShiftFlow(props: {
           recipients={props.recipients}
           oneOffs={props.oneOffs}
           busy={busy}
+          vapidPublicKey={props.vapidPublicKey}
           onSend={() => run(() => sendReport(props.shiftId, latest.id))}
           onAddCc={(email) =>
             run(() => addOneOffRecipient(props.shiftId, latest.id, email))
@@ -517,6 +521,7 @@ function SendStep({
   recipients,
   oneOffs,
   busy,
+  vapidPublicKey,
   onSend,
   onAddCc,
   onNext,
@@ -526,6 +531,7 @@ function SendStep({
   recipients: RecipientRow[];
   oneOffs: string[];
   busy: boolean;
+  vapidPublicKey: string | null;
   onSend: () => void;
   onAddCc: (email: string) => void;
   onNext: () => void;
@@ -595,9 +601,15 @@ function SendStep({
       </Card>
 
       {sent ? (
-        <Button size="lg" onClick={onNext} className="w-full">
-          Continue to clock out
-        </Button>
+        <>
+          {/* Section 13's one-time ask, at the only moment a guard has a
+              reason to say yes: they just sent it and want to know it
+              landed. */}
+          <PushPrompt publicKey={vapidPublicKey} />
+          <Button size="lg" onClick={onNext} className="w-full">
+            Continue to clock out
+          </Button>
+        </>
       ) : (
         <Button size="lg" onClick={onSend} busy={busy} className="w-full">
           <Send className="size-4" aria-hidden="true" />

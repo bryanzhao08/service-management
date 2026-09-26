@@ -53,6 +53,14 @@ export interface TimelineEntryData {
     recipientName: string | null;
     deliveredAt: string | null;
   } | null;
+  /**
+   * Written while offline and still sitting in the outbox. The row is real to
+   * the guard — they wrote it, it is on their screen, and it will land — so it
+   * renders like any other entry with one marker. Hiding it until it synced
+   * would mean a guard walking a site with no signal sees an empty timeline
+   * and writes everything twice.
+   */
+  pending?: boolean;
 }
 
 export interface SiteConfig {
@@ -251,7 +259,7 @@ export function ShiftTimeline({
                 >
                   <span className="size-2 shrink-0 animate-pulse rounded-full bg-danger" />
                   <span className="font-mono text-text-muted">
-                    {entry.incident!.code}
+                    {entry.incident!.code || "\u2014"}
                   </span>
                   <span className="min-w-0 flex-1 truncate">
                     {entry.text ?? entry.incident!.categoryKey}
@@ -515,7 +523,7 @@ function TimelineRow({
             <span className="text-sm text-text-muted">
               {LABELS[entry.type] ?? "Entry"}
             </span>
-            {incident ? (
+            {incident?.code ? (
               <span className="font-mono text-sm text-text-muted">{incident.code}</span>
             ) : null}
           </span>
@@ -559,6 +567,12 @@ function TimelineRow({
               <Badge tone="outline">
                 Edited{entry.revisionCount > 1 ? ` ${entry.revisionCount}x` : ""}
               </Badge>
+            ) : null}
+            {entry.pending ? (
+              // Named for what it means to the guard, not for the mechanism.
+              // "Queued" or "Pending sync" invites the question of whether the
+              // note is really saved; it is, on their phone, and this says so.
+              <Badge tone="outline">Saved on this phone</Badge>
             ) : null}
             {deleted ? <Badge tone="outline">Removed</Badge> : null}
           </span>

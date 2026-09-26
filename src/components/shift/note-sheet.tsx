@@ -7,7 +7,7 @@ import type { TimelineEntryData } from "@/components/shift/shift-timeline";
 import { Button } from "@/components/ui/button";
 import { ChipGroup } from "@/components/ui/chip-group";
 import { BottomSheet, SheetRoot } from "@/components/ui/sheet";
-import { createEntry } from "@/lib/actions/entries";
+import { submitTimelineWrite } from "@/lib/offline/submit";
 import { formatClock } from "@/lib/time";
 
 /**
@@ -50,21 +50,31 @@ export function NoteSheet({
     onPendingChange(1);
     const clientId = crypto.randomUUID();
     try {
-      const result = await createEntry({
-        shiftId,
+      const result = await submitTimelineWrite<{ entryId: string }>({
         clientId,
-        type: "NOTE",
-        occurredAt: openedAt,
-        text: text.trim(),
-        transcriptRaw: raw || undefined,
-        areaId: areaId || undefined,
+        label: "note",
+        envelope: {
+          action: "createEntry",
+          input: {
+            shiftId,
+            clientId,
+            type: "NOTE",
+            occurredAt: openedAt.toISOString(),
+            text: text.trim(),
+            transcriptRaw: raw || undefined,
+            areaId: areaId || undefined,
+          },
+        },
       });
-      if (!result.ok) {
+      if (result.status === "rejected") {
         setError(result.message);
         return;
       }
       onSaved({
-        id: result.data.entryId,
+        // Queued writes have no server id yet. The timeline keys on `clientId`
+        // anyway, and the entry row upserts on it when the queue drains, so
+        // the id it eventually gets is the id this row already stands for.
+        id: result.status === "sent" ? result.data.entryId : clientId,
         clientId,
         type: "NOTE",
         occurredAt: openedAt.toISOString(),
@@ -75,6 +85,7 @@ export function NoteSheet({
         mediaCount: 0,
         incident: null,
         packageInfo: null,
+        pending: result.status === "queued",
       });
       onOpenChange(false);
     } finally {

@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { jobCounts, runJobs } from "@/lib/jobs/runner";
+import { remindUnverifiedRecipients } from "@/lib/jobs/notify-shift";
 import { applyRetention } from "@/lib/jobs/retention";
 import { confirmConsoleDeliveries } from "@/lib/jobs/confirm-console";
 import { expireUnconfirmed } from "@/lib/db/deliveries";
@@ -66,6 +67,9 @@ export async function GET(request: Request): Promise<Response> {
   // Runs *after* confirmation so a row that was about to be confirmed this
   // same tick is not first declared unconfirmed and then contradicted.
   const unconfirmed = await expireUnconfirmed();
+  // Throttled to once a day per supervisor per site inside the job; the sweep
+  // itself runs every minute and must stay safe to call that often.
+  const reminders = await remindUnverifiedRecipients();
 
   return NextResponse.json(
     {
@@ -73,6 +77,7 @@ export async function GET(request: Request): Promise<Response> {
       ...ran,
       retention,
       deliveries: { confirmed, unconfirmed },
+      reminders,
       queue: await jobCounts(),
     },
     { headers: { "cache-control": "no-store" } },

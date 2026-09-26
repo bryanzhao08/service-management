@@ -6,7 +6,7 @@ import type { TimelineEntryData } from "@/components/shift/shift-timeline";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
 import { BottomSheet, SheetRoot } from "@/components/ui/sheet";
-import { createPackage } from "@/lib/actions/entries";
+import { submitTimelineWrite } from "@/lib/offline/submit";
 
 /**
  * Section 9.3's package entry.
@@ -45,24 +45,32 @@ export function PackageSheet({
     setError(null);
     const clientId = crypto.randomUUID();
     try {
-      const result = await createPackage({
-        shiftId,
+      const result = await submitTimelineWrite<{ entryId: string; packageId: string }>({
         clientId,
-        occurredAt: openedAt,
-        carrier: carrier.trim() || undefined,
-        trackingNumber: trackingNumber.trim() || undefined,
-        recipientName: recipientName.trim() || undefined,
-        room: room.trim() || undefined,
+        label: "package",
+        envelope: {
+          action: "createPackage",
+          input: {
+            shiftId,
+            clientId,
+            occurredAt: openedAt.toISOString(),
+            carrier: carrier.trim() || undefined,
+            trackingNumber: trackingNumber.trim() || undefined,
+            recipientName: recipientName.trim() || undefined,
+            room: room.trim() || undefined,
+          },
+        },
       });
-      if (!result.ok) {
+      if (result.status === "rejected") {
         setError(result.message);
         return;
       }
+      const sent = result.status === "sent" ? result.data : null;
       const label =
         [carrier.trim(), recipientName.trim()].filter(Boolean).join(" for ") ||
         "Package received";
       onSaved({
-        id: result.data.entryId,
+        id: sent ? sent.entryId : clientId,
         clientId,
         type: "PACKAGE",
         occurredAt: openedAt.toISOString(),
@@ -73,12 +81,13 @@ export function PackageSheet({
         mediaCount: 0,
         incident: null,
         packageInfo: {
-          id: result.data.packageId,
+          id: sent ? sent.packageId : clientId,
           carrier: carrier.trim() || null,
           trackingNumber: trackingNumber.trim() || null,
           recipientName: recipientName.trim() || null,
           deliveredAt: null,
         },
+        pending: result.status === "queued",
       });
       onOpenChange(false);
     } finally {

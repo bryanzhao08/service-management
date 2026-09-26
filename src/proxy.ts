@@ -25,6 +25,11 @@ const PUBLIC_PATHS = [
   "/privacy",
   "/terms",
   "/sample-report",
+  // The service worker precaches this at install. `Cache.put` rejects a
+  // redirected response, so gating it would make install throw and leave the
+  // app with no worker at all — failing in exactly the situation the page
+  // exists for. It holds no data; it is a static "you're offline" shell.
+  "/offline",
 ];
 
 export default auth((req) => {
@@ -92,7 +97,12 @@ export const config = {
      * Everything except Next internals, the auth endpoints themselves, and
      * static files. Matching those would either break sign-in or burn a
      * middleware invocation on every icon request.
+     *
+     * `sw.js` has to be here rather than in PUBLIC_PATHS: the spec fails a
+     * service worker registration outright if the script request redirects,
+     * so a signed-out visitor being sent to /sign-in does not cost a slow
+     * worker, it costs no worker at all — and nothing in the UI would say so.
      */
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|icons|manifest.webmanifest|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)",
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|icons|manifest.webmanifest|sw.js|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)",
   ],
 };
