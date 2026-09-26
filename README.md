@@ -16,6 +16,12 @@ It sells to both sides of the same job: the **guard company** that needs proof
 of work, and the **property or facility** that is paying for coverage and wants
 to see it. Pricing for both is on the landing page.
 
+## Quick start
+
+You need **Node 22**, **pnpm 12** (`corepack enable` picks up the pinned
+version), and a **Postgres 17**. Docker supplies the Postgres if you want it to,
+but it is not a requirement — see below.
+
 ```bash
 pnpm install && cp .env.example .env
 pnpm db:up && pnpm db:migrate && pnpm db:seed
@@ -26,6 +32,28 @@ That runs the whole product — auth, uploads, PDF generation, email delivery an
 push — with **no third-party account and no network**. Local fallbacks stand in
 for S3, Resend and a cron scheduler. Sign in at <http://localhost:3000> as
 `owner@meridian.test`; the magic link is written to `.data/outbox/`.
+
+`pnpm db:up` needs the Docker **daemon** actually running, not just the CLI
+installed. If you would rather not run Docker, skip that step and point
+`DATABASE_URL` at any Postgres 17 you already have — the app has no other
+dependency on Docker, and `pnpm db:deploy && pnpm db:seed` will build the schema
+from empty:
+
+```bash
+createdb transient
+# DATABASE_URL="postgresql://<you>@127.0.0.1:5432/transient?schema=public"
+pnpm db:deploy && pnpm db:seed && pnpm dev
+```
+
+Two things that will waste your afternoon if nobody tells you:
+
+- **Run on port 3000, or change `AUTH_URL` and `NEXT_PUBLIC_APP_URL` to match.**
+  Sign-in links are built from those variables, not from the port the server is
+  actually on. Start on `:3311` with the defaults and every magic link points at
+  `:3000`, which fails quietly and looks like broken auth.
+- **`PIN_SIGN_IN_ENABLED=1` turns on email + PIN sign-in.** It is off by
+  default, so without it the only way in is a magic link. On a phone, or on a
+  shared device, the PIN is the far better path.
 
 ## Screenshots
 
@@ -77,7 +105,85 @@ Email delivery is deliberately not instant: the console provider confirms a
 send about 20 seconds later, so a report legitimately shows `SENT` before it
 shows `DELIVERED`. Two sweeps back to back is not a bug.
 
-## Architecture
+## How to use it
+
+Three different people touch this product and they never see the same screen.
+The fastest way to understand it is to walk the guard's shift end to end, then
+look at it from the other two sides.
+
+### 1. Get in
+
+Go to <http://localhost:3000> and choose an account from the table above. The
+guard flow needs a **guard**, so use `guard.night@meridian.test` — owners and
+supervisors have no shift assigned and will never see a `Start shift` button.
+
+Enter the email and submit. Nothing is emailed anywhere; the message is written
+to disk instead:
+
+```bash
+grep -ohE 'http://localhost:3000/api/auth/callback[^"]*' .data/outbox/*.html | tail -1
+```
+
+Paste that into the browser and you are signed in. It works once and expires in
+10 minutes. With `PIN_SIGN_IN_ENABLED=1` you can set a PIN straight after and
+skip the outbox entirely next time, which is what a guard on a shared phone
+would actually do.
+
+### 2. Work a shift
+
+| Step | What you tap | What happens underneath |
+| --- | --- | --- |
+| Open the shift | `Start shift`, then `Clock in` | A `Shift` row opens and the client-side store starts queueing to IndexedDB |
+| Skip the intro | `Continue without the rest`, then `Go to timeline` | The onboarding wizard is optional every time |
+| Log the shift | Add notes, photos, incidents, patrols, property and blind-spot checks | Each entry is written **locally first**, then synced. The timeline shows per-entry sync state |
+| Close it out | `End shift` in the timeline header | Opens the four-step end-of-shift flow |
+
+The timeline is the product. Everything else exists to get something into it or
+get something out of it. It is deliberately honest about sync state: an entry
+that has not reached the server yet says so rather than pretending.
+
+### 3. Send the report
+
+The end-of-shift flow is four steps: review, build, send, clock out.
+
+1. `Continue to report` — review what the client is about to receive.
+2. `Build report` — renders the PDF. This is a **background job**, so it takes
+   a moment rather than returning instantly.
+3. `Continue to send`, then `Send report` — creates one `ReportDelivery` row per
+   recipient and hands off to the email provider.
+4. **Wait.** The screen moves itself to clock out once the send lands, measured
+   at about 55 seconds against the deployed instance. You do not need to tap
+   anything, and tapping `Send report` again is harmless — a job that has
+   already reached `SENT` is not resendable, and `ReportDelivery` is
+   `UNIQUE (reportId, email)` underneath as a second line of defence.
+5. `Clock out` closes the shift.
+
+Locally, jobs only run when something sweeps them. Start the server, then:
+
+```bash
+SWEEP_URL=http://localhost:3000 pnpm jobs:sweep
+```
+
+Email delivery is intentionally not instant — the console provider confirms
+about 20 seconds after the send — so a report legitimately reads `SENT` before
+it reads `DELIVERED`.
+
+### 4. Look at it as the supervisor, and as the client
+
+Sign in as `sup.westside@meridian.test` for the other half of the product:
+
+- **`/reports`** — every report and its real delivery state: sent, delivered,
+  opened, bounced. This is the answer to "did the client actually get it?", which
+  is the question the guard company is being paid to answer.
+- **`/audit`** — who changed what, and when. Exportable.
+- **`/settings`** — plan, seats, entitlements (owner only).
+
+The client never gets an account at all. They receive a signed link — `/r/[token]`
+for the report, `/g/[token]` for the photo gallery, `/confirm/[token]` to confirm
+receipt in one tap. Open one from `/reports` to see exactly what lands in their
+inbox.
+
+
 
 **Next.js 16** (App Router, React 19, TypeScript strict) on **Postgres 17 via
 Prisma 7**, with S3-compatible object storage for photos and generated PDFs.
