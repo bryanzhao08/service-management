@@ -54,10 +54,24 @@ export async function GET(
 
   const requested = new URL(request.url).searchParams.get("variant");
   const variant: Variant = isVariant(requested) ? requested : "original";
-  const key =
+  const derived =
     (variant === "thumb" ? media.storageKeyThumb : null) ??
-    (variant === "pdf" ? media.storageKeyPdf : null) ??
-    media.storageKeyOriginal;
+    (variant === "pdf" ? media.storageKeyPdf : null);
+  const key = derived ?? media.storageKeyOriginal;
+
+  // Only a variant the worker produced may render in the page. `derived`
+  // being non-null is the whole test: it means `sharp` re-encoded these bytes
+  // and this server knows their type, rather than believing an uploader.
+  //
+  // Note this is the fallback case too. When a thumb has not been built yet
+  // the key drops back to the original, `derived` is null, and the photo
+  // downloads instead of rendering -- correct, if briefly ugly, because those
+  // are still the user's bytes.
+  const inline = derived
+    ? variant === "pdf"
+      ? ("application/pdf" as const)
+      : ("image/jpeg" as const)
+    : undefined;
 
   // Belt and braces: the row was reached through the scoped layer, so its key
   // should already be in this company's prefix. If it is not, something wrote
@@ -69,7 +83,7 @@ export async function GET(
     );
   }
 
-  const url = await storage().presignDownload(key);
+  const url = await storage().presignDownload(key, undefined, inline);
   return NextResponse.redirect(new URL(url, request.url), {
     status: 307,
     headers: { "cache-control": "private, no-store" },

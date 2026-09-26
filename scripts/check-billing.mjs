@@ -85,7 +85,11 @@ async function main() {
     const res = await page.goto(`${BASE}/settings/billing`, {
       waitUntil: "domcontentloaded",
     });
-    check("owner: /settings/billing is 200", res?.status() === 200, String(res?.status()));
+    check(
+      "owner: /settings/billing is 200",
+      res?.status() === 200,
+      String(res?.status()),
+    );
 
     const text = await page.locator("body").innerText();
 
@@ -96,14 +100,20 @@ async function main() {
     );
     check("owner: trial status is visible", /trial/i.test(text));
 
-    const meter = await page.locator("[data-active-sites]").first().getAttribute("data-active-sites");
+    const meter = await page
+      .locator("[data-active-sites]")
+      .first()
+      .getAttribute("data-active-sites");
     check(
       "owner: the billed meter matches the shifts in the database",
       Number(meter) === expectedSites,
       `page=${meter} sql=${expectedSites}`,
     );
 
-    const units = await page.locator("[data-billable-units]").first().getAttribute("data-billable-units");
+    const units = await page
+      .locator("[data-billable-units]")
+      .first()
+      .getAttribute("data-billable-units");
     check(
       "owner: billable units never fall below the plan minimum",
       Number(units) >= Number(meter),
@@ -140,7 +150,11 @@ async function main() {
       String(exportRes.status()),
     );
     const body = await exportRes.json().catch(() => ({}));
-    check("owner: the 402 names the reason machine-readably", body.code === "PLAN_REQUIRED", JSON.stringify(body).slice(0, 60));
+    check(
+      "owner: the 402 names the reason machine-readably",
+      body.code === "PLAN_REQUIRED",
+      JSON.stringify(body).slice(0, 60),
+    );
 
     await ctx.close();
   }
@@ -160,6 +174,55 @@ async function main() {
   }
 
   {
+    // Give this guard a shift of our own making before signing in.
+    //
+    // The rule under test is "recording is never gated by plan", and proving
+    // it needs a shift to open. Leaning on whatever the seed or an earlier
+    // gate left behind makes this gate order-dependent: `check-auth` ends this
+    // guard's open shifts, so running it first left the dashboard with nothing
+    // to offer and this gate failed on a fixture, not on billing. Provision
+    // the precondition here so the gate answers the same question in any
+    // order. `check-first-run` already sweeps up `chk%` shifts.
+    const { rows: guard } = await sql.query('SELECT id FROM "User" WHERE email = $1', [
+      GUARD_EMAIL,
+    ]);
+    if (!guard[0]) throw new Error(`${GUARD_EMAIL} is not seeded`);
+    const { rows: site } = await sql.query(
+      `SELECT s.id,
+         (SELECT count(*) FROM "SiteEntryType" t WHERE t."siteId" = s.id) AS types
+       FROM "Site" s
+       JOIN "SiteAssignment" a ON a."siteId" = s.id
+      WHERE a."userId" = $1
+      ORDER BY types DESC, s.name LIMIT 1`,
+      [guard[0].id],
+    );
+    if (!site[0]) throw new Error(`${GUARD_EMAIL} is assigned to no site`);
+    // Incident needs categories to render at all, so pick the configured
+    // site rather than the alphabetically first one. A site with none is a
+    // real gap recorded in ASSUMPTIONS.md, not papered over here.
+    if (Number(site[0].types) === 0) {
+      throw new Error(`${GUARD_EMAIL}'s site has no entry types`);
+    }
+    // Provision it already clocked in. The dashboard links a SCHEDULED shift
+    // to `/shift/<id>/start`, which is the clock-in screen and carries no
+    // recording affordances at all -- so a scheduled fixture would fail this
+    // gate for a reason that has nothing to do with plans. Clocking in is
+    // `check-shift`'s subject, not this one's.
+    const start = new Date(Date.now() - 10 * 60_000);
+    const fixtureShiftId = `chk${Date.now()}`;
+    await sql.query(
+      `INSERT INTO "Shift" (id, "siteId", "guardId", "scheduledStart",
+         "scheduledEnd", status, "clockInAt", "clientId", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, 'ACTIVE', $4, $1, now(), now())`,
+      [
+        fixtureShiftId,
+        site[0].id,
+        guard[0].id,
+        start,
+        new Date(start.getTime() + 8 * 3_600_000),
+      ],
+    );
+
     const { ctx, page } = await signIn(browser, GUARD_EMAIL, { base: BASE, sql });
 
     const res = await page.goto(`${BASE}/settings/billing`, {
@@ -182,18 +245,37 @@ async function main() {
     // the assertion that matters is that the logging surface is reachable and
     // complete regardless of any of the above.
     const dash = await ctx.newPage();
-    const dashRes = await dash.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
+    const dashRes = await dash.goto(`${BASE}/dashboard`, {
+      waitUntil: "domcontentloaded",
+    });
     // Assert it actually rendered first. "No upgrade prompt" is also true of
     // a 404 page, so the absence check below is worthless without this.
-    check("guard: the dashboard renders", dashRes?.status() === 200, String(dashRes?.status()));
+    check(
+      "guard: the dashboard renders",
+      dashRes?.status() === 200,
+      String(dashRes?.status()),
+    );
 
-    const shiftLink = await dash.locator('a[href^="/shift/"]').first().getAttribute("href");
-    check("guard: the dashboard offers a shift to work", Boolean(shiftLink), String(shiftLink));
+    const shiftLink = await dash
+      .locator('a[href^="/shift/"]')
+      .first()
+      .getAttribute("href");
+    check(
+      "guard: the dashboard offers a shift to work",
+      Boolean(shiftLink),
+      String(shiftLink),
+    );
 
     if (shiftLink) {
       const shift = await ctx.newPage();
-      const shiftRes = await shift.goto(`${BASE}${shiftLink}`, { waitUntil: "domcontentloaded" });
-      check("guard: the shift page renders", shiftRes?.status() === 200, String(shiftRes?.status()));
+      const shiftRes = await shift.goto(`${BASE}${shiftLink}`, {
+        waitUntil: "domcontentloaded",
+      });
+      check(
+        "guard: the shift page renders",
+        shiftRes?.status() === 200,
+        String(shiftRes?.status()),
+      );
 
       const shiftText = await shift.locator("body").innerText();
       // Name the affordances rather than counting characters. A char floor
@@ -213,6 +295,13 @@ async function main() {
     }
 
     await ctx.close();
+
+    // Take the fixture back out. An ACTIVE shift left lying around is not
+    // inert: it is what the dashboard offers first, so it silently changes
+    // the answer every other gate gets. This gate broke `check-auth` that way
+    // within a minute of being written.
+    await sql.query('DELETE FROM "Entry" WHERE "shiftId" = $1', [fixtureShiftId]);
+    await sql.query('DELETE FROM "Shift" WHERE id = $1', [fixtureShiftId]);
   }
 
   await browser.close();

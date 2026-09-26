@@ -22,6 +22,8 @@ import {
  * schema — the seed leans on the same constraints the app does.
  */
 
+import { queueSampleReport, seedSampleShift } from "./sample-shift";
+
 const connectionString = process.env["DATABASE_URL"];
 if (!connectionString) {
   throw new Error("DATABASE_URL is not set. Copy .env.example to .env.");
@@ -267,9 +269,40 @@ async function main() {
   // OWNER and ADMIN see every site in the company by rule, not by row, so they
   // deliberately get no assignments — see `visible.site()` in lib/db/scoped.ts.
 
+  // ---- The sample shift ----------------------------------------------------
+  // Everything above is configuration. This is the part that makes the seeded
+  // app worth opening: a finished night, a real PDF, and one bounced delivery.
+  const shiftId = await seedSampleShift({
+    prisma,
+    siteId: hotel.id,
+    companyId: company.id,
+    guardId: userId("guard.night@meridian.test"),
+    supervisorId: userId("sup.westside@meridian.test"),
+  });
+
+  let reportLine = "no sample shift";
+  if (shiftId) {
+    const state = await queueSampleReport(
+      {
+        prisma,
+        siteId: hotel.id,
+        companyId: company.id,
+        guardId: userId("guard.night@meridian.test"),
+        supervisorId: userId("sup.westside@meridian.test"),
+      },
+      shiftId,
+    );
+    reportLine = {
+      queued: "report queued — run `pnpm jobs:sweep` with the app running",
+      "send-queued": "report built; delivery queued — run `pnpm jobs:sweep` again",
+      "already-built": "report built and delivered",
+    }[state];
+  }
+
   console.log(
     `Seeded ${company.name}: ${users.length} users, 2 sites, ${assignments.length} assignments.`,
   );
+  console.log(`Sample shift: ${reportLine}.`);
 }
 
 async function upsertAreas(siteId: string, names: readonly string[]) {

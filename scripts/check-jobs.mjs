@@ -308,9 +308,9 @@ async function main() {
 
   // A near-miss: the right secret with one character removed. A length-only or
   // prefix comparison would let this through.
-  const secret = process.env.CRON_SECRET;
+  const cronSecret = process.env.CRON_SECRET;
   const nearMiss = await ctx.request.get(`${BASE}/api/jobs/sweep`, {
-    headers: { authorization: `Bearer ${secret.slice(0, -1)}` },
+    headers: { authorization: `Bearer ${cronSecret.slice(0, -1)}` },
   });
   check(
     "sweep rejects a one-character-short secret",
@@ -319,7 +319,7 @@ async function main() {
   );
 
   const authed = await ctx.request.get(`${BASE}/api/jobs/sweep`, {
-    headers: { authorization: `Bearer ${secret}` },
+    headers: { authorization: `Bearer ${cronSecret}` },
   });
   const body = authed.ok() ? await authed.json() : {};
   check(
@@ -349,7 +349,7 @@ async function main() {
   );
 
   const swept = await ctx.request.get(`${BASE}/api/jobs/sweep`, {
-    headers: { authorization: `Bearer ${secret}` },
+    headers: { authorization: `Bearer ${cronSecret}` },
   });
   const summary = await swept.json();
   const after = await mediaRow();
@@ -385,7 +385,7 @@ async function main() {
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     await ctx.request.get(`${BASE}/api/jobs/sweep`, {
-      headers: { authorization: `Bearer ${secret}` },
+      headers: { authorization: `Bearer ${cronSecret}` },
     });
     await sql.query(
       `UPDATE "Job" SET "runAfter" = (now() AT TIME ZONE 'UTC') - interval '1 minute'
@@ -469,6 +469,44 @@ async function main() {
   await sql.query('DELETE FROM "Shift" WHERE id = $1', [PEER_SHIFT]);
 
   await sql.query('DELETE FROM "Media" WHERE id = $1', [badId]);
+
+  // The cron endpoint has to be reachable by something that holds no session,
+  // because a scheduled invocation never will. This regressed once already:
+  // the proxy answered UNAUTHENTICATED before the route could read its own
+  // secret, which in production would have meant the queue silently never
+  // drained -- no reports built, no email sent, and nothing in the app to
+  // show it. The two codes below are what tell those apart.
+  const sweepNoAuth = await fetch(`${BASE}/api/jobs/sweep`);
+  const sweepBody = await sweepNoAuth.json().catch(() => ({}));
+  check(
+    "a cookieless sweep reaches the route, not the proxy",
+    sweepBody?.error?.code === "UNAUTHORIZED",
+    `code=${sweepBody?.error?.code}`,
+  );
+  check(
+    "a cookieless sweep with no secret is refused",
+    sweepNoAuth.status === 401,
+    `status=${sweepNoAuth.status}`,
+  );
+  const sweepWrong = await fetch(`${BASE}/api/jobs/sweep`, {
+    headers: { authorization: "Bearer not-the-secret-not-the-secret--" },
+  });
+  check(
+    "a cookieless sweep with a wrong secret is refused",
+    sweepWrong.status === 401,
+    `status=${sweepWrong.status}`,
+  );
+  if (cronSecret) {
+    const sweepOk = await fetch(`${BASE}/api/jobs/sweep`, {
+      headers: { authorization: `Bearer ${cronSecret}` },
+    });
+    check(
+      "a cookieless sweep with the right secret drains the queue",
+      sweepOk.status === 200,
+      `status=${sweepOk.status}`,
+    );
+  }
+
   await browser.close();
   await sql.end();
 

@@ -63,6 +63,18 @@ export default auth((req) => {
     // permanently UNVERIFIED and the bounce-detection story with nothing to
     // stand on.
     pathname.startsWith("/confirm/") ||
+    // The cron endpoint. A scheduled invocation carries no session cookie and
+    // never will, so gating it here meant the queue could not be drained by
+    // the only thing that is supposed to drain it: every report would sit
+    // QUEUED forever in production and nothing would say why, because the
+    // 401 is returned before the route is reached.
+    //
+    // Letting it past costs nothing. The route authenticates itself with a
+    // constant-time comparison against CRON_SECRET and returns 503 when the
+    // secret is unset, so it fails closed rather than open — the same
+    // argument as the Svix-signed webhook above, and a stronger check than a
+    // cookie for a caller that is a machine.
+    pathname === "/api/jobs/sweep" ||
     pathname === "/api/uploads/local";
 
   if (!req.auth && !isPublic) {

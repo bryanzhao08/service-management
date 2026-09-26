@@ -44,7 +44,20 @@ function contentSecurityPolicy(): string {
     // Next's dev overlay and HMR client need eval and a websocket.
     directives["script-src"].push("'unsafe-eval'");
     directives["connect-src"].push("ws:", "wss:");
-  } else {
+  }
+
+  // Emit `upgrade-insecure-requests` only when this app is actually served
+  // over https, which is what the configured public URL says.
+  //
+  // Keying it off NODE_ENV instead looks equivalent and is not: a production
+  // build run locally over http gets the directive, and then every redirect
+  // to an absolute http:// URL is rewritten to https:// and dies on
+  // ERR_SSL_PROTOCOL_ERROR. That is not hypothetical -- it is what made every
+  // photo thumbnail in the app render as a broken image, because media is
+  // served by a 307 to a presigned URL. The directive is also pointless here:
+  // it can only help a page that is already https.
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.AUTH_URL ?? "";
+  if (appUrl.startsWith("https://")) {
     directives["upgrade-insecure-requests"] = [];
   }
 

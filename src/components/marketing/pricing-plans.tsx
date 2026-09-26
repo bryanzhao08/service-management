@@ -149,7 +149,11 @@ export function PlanComparison({ audience }: { audience: Audience }) {
     audience === "operator" ? "guard companies" : "the organisations that hire them"
   }`;
   return (
-    <div className="overflow-x-auto">
+    // The comparison table is wider than a phone, so this scrolls sideways.
+    // A bare overflow div is unreachable without a mouse: the region needs to
+    // be focusable and named, or a keyboard user simply cannot see the columns
+    // that are off-screen.
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={caption}>
       <table className="w-full min-w-[34rem] border-collapse text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead>

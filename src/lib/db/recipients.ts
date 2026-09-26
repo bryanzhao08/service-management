@@ -103,6 +103,36 @@ export async function listRecipients(
     });
 }
 
+/**
+ * One site and its recipients, or null if this actor cannot see that site.
+ *
+ * Separate from `listRecipients` because the site has to be resolved even
+ * when it has no recipients at all: "nobody is on this list" is exactly the
+ * state an operator needs to see and fix, and deriving the site name from the
+ * first recipient row would render that case as a blank page.
+ *
+ * Returning null for both "no such site" and "not your site" is deliberate.
+ * Telling the two apart would confirm that a site id exists in someone else's
+ * company.
+ */
+export async function siteRecipients(
+  actor: Actor,
+  siteId: string,
+  now = new Date(),
+): Promise<{
+  site: { id: string; name: string; code: string };
+  rows: RecipientRow[];
+} | null> {
+  const site = await prisma.site.findFirst({
+    where: { ...visible.site(actor), id: siteId },
+    select: { id: true, name: true, code: true },
+  });
+  if (!site) return null;
+
+  const all = await listRecipients(actor, now);
+  return { site, rows: all.filter((r) => r.siteId === site.id) };
+}
+
 export type RecipientHistoryRow = {
   reportId: string;
   version: number;

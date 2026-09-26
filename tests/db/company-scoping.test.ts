@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Role } from "@/generated/prisma/enums";
 import { db, visible, type Actor } from "@/lib/db/scoped";
+import { siteRecipients } from "@/lib/db/recipients";
 import { createTenant, raw, resetDatabase } from "./helpers";
 
 /**
@@ -131,6 +132,59 @@ describe("site scope within a company", () => {
 
     await raw.shift.delete({ where: { id: theirShift.id } });
     await raw.user.delete({ where: { id: colleague.id } });
+  });
+});
+
+describe("siteRecipients", () => {
+  it("is set up so that an unscoped read would find company B's recipient", async () => {
+    // The control. Without a real row at B's site, "A cannot see it" is true
+    // for free and the test below proves nothing.
+    await raw.recipient.create({
+      data: {
+        siteId: b.site.id,
+        name: "Bravo Ops",
+        email: "ops@bravo.test",
+        roleLabel: "Operations Manager",
+        required: true,
+        status: "VERIFIED",
+      },
+    });
+    const unscoped = await raw.recipient.findMany({ where: { siteId: b.site.id } });
+    expect(unscoped).toHaveLength(1);
+  });
+
+  it("returns null for company B's site with a company A session", async () => {
+    expect(await siteRecipients(actorFor(a, "owner"), b.site.id)).toBeNull();
+  });
+
+  it("returns null rather than an empty list, so the page 404s instead of\n     rendering an add-recipient form pointed at another company's site", async () => {
+    const result = await siteRecipients(actorFor(a, "owner"), b.site.id);
+    // The distinction matters: `{ rows: [] }` is a legitimate state for one of
+    // your own sites, and the page renders a working form for it.
+    expect(result).not.toEqual({ site: expect.anything(), rows: [] });
+    expect(result).toBeNull();
+  });
+
+  it("returns the site and its recipients for the actor's own site", async () => {
+    await raw.recipient.create({
+      data: {
+        siteId: a.site.id,
+        name: "Alpha Ops",
+        email: "ops@alpha.test",
+        roleLabel: "Operations Manager",
+        required: true,
+        status: "VERIFIED",
+      },
+    });
+    const result = await siteRecipients(actorFor(a, "owner"), a.site.id);
+    expect(result?.site.id).toBe(a.site.id);
+    expect(result?.rows.map((r) => r.email)).toEqual(["ops@alpha.test"]);
+  });
+
+  it("never leaks another site's recipients into the list", async () => {
+    const result = await siteRecipients(actorFor(a, "owner"), a.site.id);
+    expect(result?.rows.every((r) => r.siteId === a.site.id)).toBe(true);
+    expect(result?.rows.map((r) => r.email)).not.toContain("ops@bravo.test");
   });
 });
 

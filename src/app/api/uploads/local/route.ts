@@ -22,6 +22,10 @@ import { verifyDownloadToken, verifyUploadToken } from "@/lib/storage/tokens";
 
 export const runtime = "nodejs";
 
+/** Mirrors `InlineType`. A set, because this is a runtime check on a value
+ *  that arrived from outside the type system, inside a token. */
+const INLINE_TYPES = new Set(["image/jpeg", "application/pdf"]);
+
 function unauthorized() {
   return NextResponse.json(
     { error: { code: "INVALID_TOKEN", message: "Link expired or invalid." } },
@@ -98,10 +102,21 @@ export async function GET(request: Request): Promise<Response> {
         0,
         claims.exp - Math.floor(Date.now() / 1000),
       )}`,
-      // These objects are user-supplied bytes. Serving them inline would make
-      // an uploaded .html or .svg same-origin script.
-      "content-disposition": "attachment",
-      "content-type": "application/octet-stream",
+      // Default: these objects are user-supplied bytes. Serving them inline
+      // would make an uploaded .html or .svg same-origin script.
+      //
+      // `claims.inline` is the narrow exception, and it is safe for two
+      // reasons that both have to hold: it is inside the signed token, so the
+      // caller cannot add it to a URL, and the server only signs it for bytes
+      // it produced itself. The allowlist here is a third check, so a future
+      // caller that passes something odd gets a download rather than a
+      // rendered document.
+      ...(claims.inline && INLINE_TYPES.has(claims.inline)
+        ? { "content-disposition": "inline", "content-type": claims.inline }
+        : {
+            "content-disposition": "attachment",
+            "content-type": "application/octet-stream",
+          }),
       "x-content-type-options": "nosniff",
     },
   });

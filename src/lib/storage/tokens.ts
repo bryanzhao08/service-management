@@ -30,6 +30,19 @@ export type DownloadToken = {
   key: string;
   /** Unix seconds. */
   exp: number;
+  /**
+   * The exact content type to serve this object as, inline.
+   *
+   * Absent means the default: `application/octet-stream` as an attachment,
+   * which is the only safe way to hand back bytes a user uploaded. An
+   * uploaded `.svg` or `.html` served inline would run as same-origin script.
+   *
+   * It is set only for objects the server itself produced -- a `sharp`
+   * re-encode or a generated PDF -- where the bytes are ours and the type is
+   * known rather than claimed. Because it lives inside the signed token, the
+   * caller asking for the object cannot choose it.
+   */
+  inline?: string;
 };
 
 /**

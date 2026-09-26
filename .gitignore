@@ -52,3 +52,7 @@ next-env.d.ts
 
 # Local storage driver and dev email outbox.
 /.data/
+
+# Playwright run artifacts: traces and failure snapshots, regenerated every run.
+/test-results/
+/playwright-report/

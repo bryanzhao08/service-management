@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/client";
-import { storage } from "@/lib/storage/driver";
+import { type InlineType, storage } from "@/lib/storage/driver";
 
 /**
  * The read-only photo gallery the report's QR code and email footer point at.
@@ -93,7 +93,14 @@ export async function galleryByToken(token: string): Promise<GalleryData | null>
       return {
         id: item.id,
         kind: item.kind,
-        thumbUrl: await safeUrl(thumbKey),
+        // Inline only when this is the worker's own JPEG. On the fallback
+        // path the key is the uploaded original, so it downloads instead of
+        // rendering -- the same rule the in-app media route follows, and the
+        // reason an uploaded .svg can never execute on this page.
+        thumbUrl: await safeUrl(
+          thumbKey,
+          item.storageKeyThumb ? "image/jpeg" : undefined,
+        ),
         fullUrl: await safeUrl(item.storageKeyOriginal),
         capturedAt: item.capturedAt,
         caption: item.entry?.text ?? null,
@@ -120,9 +127,9 @@ export async function galleryByToken(token: string): Promise<GalleryData | null>
  * missing key is a gap in the grid; a thrown error is a 500 on a link a
  * manager was given as proof.
  */
-async function safeUrl(key: string): Promise<string | null> {
+async function safeUrl(key: string, inline?: InlineType): Promise<string | null> {
   try {
-    return await storage().presignDownload(key);
+    return await storage().presignDownload(key, undefined, inline);
   } catch {
     return null;
   }

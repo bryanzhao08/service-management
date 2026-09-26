@@ -37,6 +37,16 @@ export type PresignedUpload = {
   expiresAt: string;
 };
 
+/**
+ * The only content types an object may ever be served inline as.
+ *
+ * A closed union rather than a string, because the whole safety of inline
+ * rendering rests on the type being one this server chose. `image/svg+xml` is
+ * deliberately absent: an SVG is a script container, and it is also never
+ * something the media worker emits -- every derived image is a `sharp` JPEG.
+ */
+export type InlineType = "image/jpeg" | "application/pdf";
+
 export interface StorageDriver {
   readonly name: "local" | "s3";
 
@@ -48,8 +58,19 @@ export interface StorageDriver {
     ttlSeconds?: number;
   }): Promise<PresignedUpload>;
 
-  /** A short-lived read URL. Section 17: 15 minutes for in-app use. */
-  presignDownload(key: string, ttlSeconds?: number): Promise<string>;
+  /**
+   * A short-lived read URL. Section 17: 15 minutes for in-app use.
+   *
+   * `inline` names the content type to serve the object as, rendered in the
+   * page rather than downloaded. Pass it ONLY for bytes this server produced
+   * (a `sharp` thumbnail, a generated PDF). Never pass it for an uploaded
+   * original: user-supplied bytes served inline are a same-origin script.
+   */
+  presignDownload(
+    key: string,
+    ttlSeconds?: number,
+    inline?: InlineType,
+  ): Promise<string>;
 
   /** Server-side write, used by the media worker writing derived variants. */
   put(key: string, body: Buffer, contentType: string): Promise<void>;
@@ -119,9 +140,10 @@ class LocalStorageDriver implements StorageDriver {
   async presignDownload(
     key: string,
     ttlSeconds = DEFAULT_DOWNLOAD_TTL_SECONDS,
+    inline?: InlineType,
   ): Promise<string> {
     const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
-    const token = signDownloadToken({ key, exp });
+    const token = signDownloadToken({ key, exp, ...(inline ? { inline } : {}) });
     return `/api/uploads/local?token=${encodeURIComponent(token)}`;
   }
 
@@ -222,10 +244,23 @@ class S3StorageDriver implements StorageDriver {
   async presignDownload(
     key: string,
     ttlSeconds = DEFAULT_DOWNLOAD_TTL_SECONDS,
+    inline?: InlineType,
   ): Promise<string> {
     return getSignedUrl(
       this.client,
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        // S3 stores whatever type `put` was given; these response overrides
+        // are what make the browser render it rather than save it. They are
+        // part of the signature, so a caller cannot add them to a URL.
+        ...(inline
+          ? { ResponseContentType: inline, ResponseContentDisposition: "inline" }
+          : {
+              ResponseContentType: "application/octet-stream",
+              ResponseContentDisposition: "attachment",
+            }),
+      }),
       { expiresIn: ttlSeconds },
     );
   }

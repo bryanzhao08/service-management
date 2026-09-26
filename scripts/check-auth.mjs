@@ -106,6 +106,55 @@ async function resetPin() {
   return res.rowCount ?? 0;
 }
 
+/**
+ * The guard's assigned site names, and the names of sites they must not see.
+ *
+ * A cross-tenant site is created here rather than assumed, because the check
+ * it feeds is a negative: if the list of foreign names is empty, "none of them
+ * appear" is true for free. The gate asserts the list is non-empty for that
+ * reason.
+ */
+async function siteNames() {
+  const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+
+  await client.query(
+    `INSERT INTO "Company" (id, name, slug, "createdAt", "updatedAt")
+     VALUES ('auth-foreign-co', 'Rival Patrol Group', 'rival-patrol-group', now(), now())
+     ON CONFLICT (id) DO NOTHING`,
+  );
+  await client.query(
+    `INSERT INTO "Site" (id, "companyId", code, name, address, timezone, "loggingMode", "createdAt", "updatedAt")
+     VALUES ('auth-foreign-site', 'auth-foreign-co', 'RIV', 'Rival Distribution Center',
+             '9 Rival Road', 'America/Los_Angeles', 'FULL', now(), now())
+     ON CONFLICT (id) DO NOTHING`,
+  );
+
+  const { rows: mine } = await client.query(
+    `SELECT s.name FROM "Site" s
+       JOIN "SiteAssignment" a ON a."siteId" = s.id
+       JOIN "User" u ON u.id = a."userId"
+      WHERE u.email = $1`,
+    [GUARD_EMAIL],
+  );
+  const assigned = mine.map((r) => r.name);
+
+  const { rows: all } = await client.query(`SELECT name FROM "Site"`);
+  const foreign = all.map((r) => r.name).filter((name) => !assigned.includes(name));
+
+  await client.end();
+  return { assigned, foreign };
+}
+
+/** Remove the cross-tenant row `siteNames` created. */
+async function dropForeignSite() {
+  const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  await client.query(`DELETE FROM "Site" WHERE id = 'auth-foreign-site'`);
+  await client.query(`DELETE FROM "Company" WHERE id = 'auth-foreign-co'`);
+  await client.end();
+}
+
 const browser = await chromium.launch();
 
 try {
@@ -236,15 +285,33 @@ try {
       /Terrence Boyd/.test(body),
       body.slice(0, 160),
     );
+
+    // Both halves of this used to be wrong in the same way: they hardcoded
+    // names.
+    //
+    // "both of their assigned sites" only holds in one branch of the
+    // dashboard. `StartUnscheduled` lists every assignment, but it renders
+    // only when there is no next scheduled shift; with one scheduled, the
+    // screen correctly shows that shift instead. The assertion passed for a
+    // while purely because re-seeding kept moving which shifts were in the
+    // future, so it was measuring the fixture, not the product.
+    //
+    // "no site they are not assigned to" was worse: it looked for "alpha
+    // site"/"bravo site", and no such rows have ever existed. It could not
+    // fail. A vacuous negative is indistinguishable from a passing one.
+    //
+    // Both are now derived from the database, and the negative is given a
+    // real row to find.
+    const { assigned, foreign } = await siteNames();
     check(
-      "and both of their assigned sites",
-      /Westside Hotel/.test(body) && /Hillcrest/.test(body),
-      body.slice(0, 200),
+      "at least one assigned site is named on the dashboard",
+      assigned.some((name) => body.includes(name)),
+      `assigned=${JSON.stringify(assigned)} body=${body.slice(0, 200)}`,
     );
     check(
-      "and no site they are not assigned to",
-      !/alpha site|bravo site/.test(body),
-      body.slice(0, 200),
+      "and no site outside their assignments, including a live one",
+      foreign.length > 0 && !foreign.some((name) => body.includes(name)),
+      `foreign=${JSON.stringify(foreign)} body=${body.slice(0, 200)}`,
     );
   }
 
@@ -284,11 +351,37 @@ try {
     );
     check("and does not reach the dashboard", p2.url().includes("/pin"), p2.url());
 
+    // Finish with the correct PIN. Two reasons, and the second is the reason
+    // this gate used to fail on its fifth run inside fifteen minutes.
+    //
+    // 1. It is the assertion the wrong-PIN checks above imply but never make:
+    //    that the counter is forgiving. A regression that locked a guard out
+    //    after a single mistyped digit would pass every other check in here.
+    // 2. The attempt counter lives in a per-process Map (src/lib/auth/pin.ts),
+    //    so no SQL reset can reach it, and only a SUCCESSFUL entry clears it
+    //    (actions.ts calls clearPinAttempts there and in "Forgot PIN" — the
+    //    set-PIN path does not). Ending on a failure therefore left count+1
+    //    behind every run until MAX_PIN_ATTEMPTS locked the seeded guard out
+    //    and this gate started reading "Too many attempts" instead of
+    //    "Incorrect PIN". Same rule as the shift fixture in check-billing: a
+    //    gate that fabricates state clears it up after itself.
+    await p2.fill('input[name="pin"]', PIN);
+    await Promise.all([
+      p2.waitForURL(/\/dashboard/, { timeout: 15_000 }),
+      p2.click('button[type="submit"]'),
+    ]);
+    check(
+      "the correct PIN still unlocks after a failed try",
+      p2.url().includes("/dashboard"),
+      p2.url(),
+    );
+
     await fresh.close();
   }
 
   await ctx.close();
 } finally {
+  await dropForeignSite();
   await browser.close();
 }
 
