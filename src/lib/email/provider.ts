@@ -59,37 +59,47 @@ export const OUTBOX_DIR = path.join(process.cwd(), ".data", "outbox");
 export class ConsoleEmailProvider implements EmailProvider {
   async send(message: EmailMessage): Promise<SendResult> {
     const messageId = `console-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    await mkdir(OUTBOX_DIR, { recursive: true });
 
     const stem = path.join(OUTBOX_DIR, messageId);
     // Attachments are summarised, never serialised. `...message` would put an
     // 8MB PDF buffer through JSON.stringify and write a useless megabyte-scale
     // file that no test can read and no human can open.
     const { attachments, ...rest } = message;
-    await Promise.all([
-      writeFile(`${stem}.html`, message.html, "utf8"),
-      writeFile(
-        `${stem}.json`,
-        JSON.stringify(
-          {
-            messageId,
-            sentAt: new Date().toISOString(),
-            ...rest,
-            attachments: (attachments ?? []).map((a) => ({
-              filename: a.filename,
-              contentType: a.contentType,
-              bytes: a.content.byteLength,
-            })),
-          },
-          null,
-          2,
-        ),
-        "utf8",
-      ),
-    ]);
+    const summary = {
+      messageId,
+      sentAt: new Date().toISOString(),
+      ...rest,
+      attachments: (attachments ?? []).map((a) => ({
+        filename: a.filename,
+        contentType: a.contentType,
+        bytes: a.content.byteLength,
+      })),
+    };
 
-    if (process.env.NODE_ENV !== "test") {
-      console.info(`[email] ${message.subject} -> ${message.to}  (${stem}.html)`);
+    try {
+      await mkdir(OUTBOX_DIR, { recursive: true });
+      await Promise.all([
+        writeFile(`${stem}.html`, message.html, "utf8"),
+        writeFile(`${stem}.json`, JSON.stringify(summary, null, 2), "utf8"),
+      ]);
+
+      if (process.env.NODE_ENV !== "test") {
+        console.info(`[email] ${message.subject} -> ${message.to}  (${stem}.html)`);
+      }
+    } catch (error) {
+      // Serverless filesystems are read-only, so the outbox write throws EROFS.
+      // Letting that propagate would take the caller down with it, and the
+      // caller is sign-in: a deployment with no RESEND_API_KEY would answer
+      // every magic-link request with a 500 and never tell anyone why. The
+      // outbox is an inspection aid, not the delivery mechanism, so degrade to
+      // the log — which on a serverless host is the only readable surface
+      // anyway — and let the send succeed.
+      const code = (error as NodeJS.ErrnoException).code ?? "unknown";
+      console.error(
+        `[email] outbox write failed (${code}); this deployment has no RESEND_API_KEY, ` +
+          `so nothing is being delivered. Set one to send real mail.`,
+      );
+      console.info(`[email] ${JSON.stringify(summary)}`);
     }
 
     return { messageId, provider: "console" };
