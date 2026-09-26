@@ -583,9 +583,18 @@ model Report {
   bytes         Int?
   pages         Int?
   sha256        String?
+  /// SHA-256 of the shift's *facts*, not of the file. Printed in the footer so
+  /// a page printed today can be checked against the database years from now.
+  /// The file hash cannot do that job: stamping it into the file changes it.
+  contentHash   String?
   /// The audit trail of the size-budget algorithm: each step it took to get
   /// under the cap, so a small report can be explained rather than guessed at.
   sizeSteps     Json?
+  /// Opaque token behind the read-only photo gallery the QR code points at.
+  /// Null until the render succeeds, so a failed build never leaves a live
+  /// link pointing at a report that was never produced.
+  galleryToken     String?   @unique
+  galleryExpiresAt DateTime?
   generatedAt   DateTime?
   sentAt        DateTime?
   generatedById String

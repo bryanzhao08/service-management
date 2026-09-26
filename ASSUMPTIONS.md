@@ -622,3 +622,45 @@ different-company row through for the wrong reason.
 The gate's own negative control is the one worth keeping: stubbing out
 `enqueueAndKick` in `POST /api/media` fails seven checks, all downstream of the
 nudge, and it is what exposed the dimensions overclaim above.
+
+## Milestone 6 — PDF report
+
+**Two hashes, not one.** §11 asks for a SHA-256 of the PDF stamped into the
+PDF's own footer. That is self-referential: changing the footer changes the
+digest. Both of §11's escape hatches (a second pass, a receipt page) have the
+same problem. So there are two values with different jobs:
+
+- `contentHash` — SHA-256 of the canonical **facts**, sorted by id rather than
+  query order, printed in the footer and in full on the cover. Recomputable
+  from the database years later, and unchanged if the report is re-rendered.
+- `sha256` — SHA-256 of the finished **bytes**, on the row and in the email.
+  Answers "is this the file I was sent".
+
+A test asserts the two differ, so the design cannot silently collapse into one.
+
+**No `render` prop anywhere in the document.** @react-pdf 7.0.x does not lay
+out a `render`-prop Text, and a broken one collapses its whole parent. The
+footer's report id and hash were painted nowhere while pypdf found every
+character of them, so the gate was green over a blank footer. Bisected against
+real renders: deleting the `render` sibling fixed it, re-adding it broke it
+again. `Page N of M` is gone; the cover states the document's length instead,
+settled by a second render pass.
+
+**The gate rasterises.** `check-report.mjs` asserts painted bounding boxes via
+pymupdf, not just extractable text via pypdf, because the bug above proves
+those are different questions. Reproducing the original footer markup fails
+exactly that check and nothing else.
+
+**Size ladder degrades photo size before photo count**, and the last rung wins
+even if it is still over cap. A report that is too large beats no report.
+
+**Photos are passed as pre-resolved data URIs**, never URLs. Signed URLs race
+their own expiry inside the renderer and fail as silent blank boxes.
+
+**Missing report-template section keys default to ON.** The opposite default
+would silently drop new sections from every existing site.
+
+**Report dates carry a year** (`formatDateTimeArchival`). The app's own
+formatter does not, because in the app you are looking at today. A report gets
+opened by an adjuster eighteen months later, and a date with no year is not
+evidence.

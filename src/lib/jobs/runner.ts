@@ -9,6 +9,7 @@ import {
   type ClaimedJob,
 } from "@/lib/db/jobs";
 
+import { buildReport } from "./handlers/build-report";
 import { processMedia, processMediaPayload } from "./handlers/process-media";
 
 /**
@@ -33,6 +34,7 @@ type Handler = (payload: unknown) => Promise<unknown>;
  */
 const HANDLERS: Partial<Record<JobType, Handler>> = {
   PROCESS_MEDIA: processMedia,
+  GENERATE_REPORT: buildReport,
 };
 
 export class UnhandledJobTypeError extends Error {

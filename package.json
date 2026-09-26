@@ -33,7 +33,8 @@
     "check:shift": "node scripts/check-shift.mjs",
     "check:jobs": "node scripts/check-jobs.mjs",
     "check:lighthouse": "node scripts/check-lighthouse.mjs",
-    "verify": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm contrast:check && pnpm test"
+    "verify": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm contrast:check && pnpm test",
+    "check:report": "node scripts/check-report.mjs"
   },
   "dependencies": {
     "@auth/core": "0.41.3",

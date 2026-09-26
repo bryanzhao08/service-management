@@ -25,6 +25,22 @@ export function formatDateTime(
   return formatInTimeZone(when, timeZone, "EEE d MMM, HH:mm");
 }
 
+/**
+ * e.g. `Mon 24 Feb 2026, 02:14` — the archival form, for the PDF.
+ *
+ * The year is redundant in the app, where you are looking at today's shift,
+ * and it is the whole point in a report. These documents get pulled out of an
+ * email thread by an insurance adjuster eighteen months after the shift, and a
+ * date with no year is not evidence of anything.
+ */
+export function formatDateTimeArchival(
+  when: Date | null | undefined,
+  timeZone: string,
+): string {
+  if (!when) return "—";
+  return formatInTimeZone(when, timeZone, "EEE d MMM yyyy, HH:mm");
+}
+
 /** The hour bucket a timeline entry belongs to, e.g. `02:00`. */
 export function hourBucket(when: Date, timeZone: string): string {
   return formatInTimeZone(when, timeZone, "HH:00");
