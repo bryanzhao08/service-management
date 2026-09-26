@@ -75,13 +75,13 @@ image still produces a perfectly valid screenshot otherwise.
 ## Demo data
 
 `pnpm db:seed` gives you a guard company, one site — Westside Hotel, on `FULL`
-logging — three shifts, and four accounts you can sign in as:
+logging — two shifts, and four accounts you can sign in as:
 
 | Account | Role | What they see |
 | --- | --- | --- |
 | `owner@meridian.test` | owner | everything, plus plan and billing |
 | `sup.westside@meridian.test` | supervisor | reports, delivery state, audit log |
-| `guard.night@meridian.test` | guard | all three seeded shifts at the hotel |
+| `guard.night@meridian.test` | guard | both seeded shifts at the hotel: last night's, finished, and one scheduled for tonight |
 | `guard.swing@meridian.test` | guard | no shift assigned — the empty state |
 
 `pnpm db:demo` goes further: it seeds, runs the background job sweep, seeds
@@ -257,6 +257,7 @@ a working local fallback, which is what lets the quick start run offline.
 | `AUTH_SECRET` | yes | Auth.js signing key. `openssl rand -base64 32`. |
 | `AUTH_URL` | yes | Absolute URL of this app. Magic links are built from it. |
 | `NEXT_PUBLIC_APP_URL` | yes | Same value, exposed to the browser. |
+| `PIN_SIGN_IN_ENABLED` | optional | `1` turns on email + PIN sign-in. Anything else, including unset, leaves the magic link as the only way in. It fails closed on purpose: a PIN is 4 to 6 digits, so enabling it should be a decision rather than a default. |
 | `LINK_SIGNING_SECRET` | yes | Signs `/r/[token]` and `/g/[token]` client links and download tokens. `openssl rand -base64 32`. |
 | `CRON_SECRET` | yes | `GET /api/jobs/sweep` requires it as a bearer token. |
 | `EMAIL_FROM` | yes | From address on report emails. |
@@ -402,13 +403,35 @@ row, so one bounce does not hide behind three successes — the seeded hotel
 includes a deliberately bad address so the bounce path is exercised on a fresh
 database rather than only in production.
 
-Everything is scoped to the company on the session. A user from one company
-cannot read another's sites — `tests/db/` asserts that directly, and
+### Who can read a shift, and who can write to one
+
+These are two different rules, and treating them as one was a real bug.
+
+**Across companies, nothing is shared.** A user from one company cannot read
+another's sites. `tests/db/company-scoping.test.ts` asserts it directly, and
 `check-auth` re-proves it through the browser.
+
+**Inside a company, a shift is readable by everyone posted to that site and
+writable only by the guard it belongs to.** The read has to be wide, because
+acknowledging a handoff means reading the outgoing guard's shift. The write has
+to be narrow, because the timeline is the evidence record that ends up in a
+client's PDF, and nothing in that document would say an entry was not written
+by the guard whose name is on it.
+
+`tests/db/shift-writes.test.ts` covers every write path — entries, incidents,
+packages, property and blind-spot checks, edits, strikes, handoffs — and each
+test first asserts that the colleague's shift still *reads*, so narrowing the
+read rule would fail them too. The one designed cross-guard write is the
+`HANDOFF_GIVEN` entry on the outgoing shift, which is why ownership there is
+asserted on the incoming side instead.
 
 ## Deploying to Vercel
 
-1. Push the repo and import it. Framework detection handles the build.
+1. Push the repo and **import it from Git**. Framework detection handles the
+   build. Importing is also what wires pushes to deployments: a project created
+   by running `vercel --prod` from the CLI has no Git connection, so `git push`
+   builds nothing and every deploy stays manual until you run
+   `vercel git connect`. Worth knowing before you assume a merged fix is live.
 2. Provision Postgres and set `DATABASE_URL`. On a Vercel-managed Neon org the
    Neon CLI cannot create projects (`action restricted`); use
    `vercel integration add neon`, which provisions the database and writes

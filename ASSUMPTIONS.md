@@ -245,10 +245,28 @@ stale against a cached list of ids.
 fields in `where`, so a company filter cannot be attached to it — a single
 `findUnique(id)` would read across tenants. Everything is `findFirst`.
 
-**A guard's *shifts* are not narrowed to their own `guardId`, deliberately.**
-Section 8 scopes a guard's *reports* to their own; acknowledging a handoff means
-reading the outgoing guard's shift. A test pins this so a later "tightening"
+**A guard's *shifts* are not narrowed to their own `guardId` for reads,
+deliberately — but every write is.** Section 8 scopes a guard's *reports* to
+their own; acknowledging a handoff means reading the outgoing guard's shift, so
+`visible.shift` stays site-scoped and a test pins that so a later "tightening"
 cannot land as an improvement.
+
+That read rule was also being used as the write rule, which meant any guard at a
+shared site could file, edit or strike entries in a colleague's report, with
+nothing in the timeline or the client's PDF recording that it was not them.
+`assertOwnShift` in `lib/db/scoped.ts` now gates every write path on
+`guardId === actor.userId`, matching what the UI already claimed at
+`shift/[id]/page.tsx`. It throws `NotVisibleError` rather than a distinct "not
+yours", because naming an id as forbidden confirms the id exists. The single
+designed exception is the `HANDOFF_GIVEN` entry written onto the outgoing
+guard's shift, which goes through the transaction directly; ownership there is
+asserted on the incoming shift instead.
+
+**Not in scope, on purpose: writes are still accepted on a shift that has
+clocked out.** The UI's rule is `guardId === actor.userId && clockOutAt === null`
+and only the first half is enforced in the data layer, because the offline
+outbox may legitimately flush after clock-out and that queue has never been
+exercised offline. Closing it needs a grace window designed, not a bare refusal.
 
 The ESLint `no-restricted-imports` rule banning Prisma imports outside
 `lib/db/**` is what makes this mechanical rather than a convention. It is scoped
@@ -466,11 +484,13 @@ belongs with section 9.9's entry-types tab.
 
 **A site with no configured entry types cannot log an incident.** Category is
 the one required field, so an unconfigured site leaves the sheet showing "Pick a
-category" with nothing to pick. Found by the gate, which had picked Hillcrest
-Middle School — a seeded site with **zero** entry types, while Westside Hotel
-has ten. The gate now selects a configured site deliberately and says why. The
-product fix (hide Incident, or tell the guard the site is unconfigured) belongs
-with the site-config screen that creates these rows.
+category" with nothing to pick. Found when the gate picked Hillcrest Middle
+School, which was then a second seeded site with **zero** entry types, while
+Westside Hotel had a full set. The seed has since been cut back to the hotel
+alone, so Hillcrest no longer exists and the gate selects a configured site
+deliberately and says why. The underlying product fix — hide Incident, or tell
+the guard the site is unconfigured — still belongs with the site-config screen
+that creates these rows, and is still unbuilt.
 
 ### What `scripts/check-shift.mjs` actually proves
 
