@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import type { Provider } from "next-auth/providers";
+import Credentials from "next-auth/providers/credentials";
 import {
   createAuthAdapter,
   findSessionClaims,
@@ -8,6 +9,7 @@ import {
 import { record as recordAudit } from "@/lib/db/audit";
 import { authConfig, MAGIC_LINK_MAX_AGE_SECONDS } from "./config";
 import { deliverMagicLink } from "./magic-link";
+import { authorizePinSignIn, PIN_SIGN_IN_ENABLED } from "./pin-sign-in";
 
 /**
  * Node-only. Adds the adapter and the magic-link provider to the edge-safe
@@ -33,10 +35,33 @@ const magicLink: Provider = {
   sendVerificationRequest: deliverMagicLink,
 };
 
+/**
+ * Email + PIN, registered only when `PIN_SIGN_IN_ENABLED` is "1". See
+ * `pin-sign-in.ts` for why it is off by default.
+ *
+ * Credentials providers require the JWT session strategy, which `config.ts`
+ * already sets for unrelated reasons, so nothing else changes. `authorize`
+ * returns null for every failure, which Auth.js surfaces as a single
+ * `CredentialsSignin` error; the form renders one message for all of them.
+ *
+ * The magic-link provider stays registered alongside it. The flag replaces the
+ * sign-in *screen*, not the wiring, so outstanding links still redeem and
+ * turning the flag back off needs no deploy-ordering care.
+ */
+const pinCredentials: Provider = Credentials({
+  id: "pin",
+  name: "Email and PIN",
+  credentials: {
+    email: { label: "Work email", type: "email" },
+    pin: { label: "PIN", type: "password" },
+  },
+  authorize: authorizePinSignIn,
+});
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
   adapter: createAuthAdapter(),
-  providers: [magicLink],
+  providers: PIN_SIGN_IN_ENABLED ? [magicLink, pinCredentials] : [magicLink],
   callbacks: {
     ...authConfig.callbacks,
 

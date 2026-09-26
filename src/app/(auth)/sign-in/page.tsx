@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { SignInForm } from "./sign-in-form";
+import { PIN_SIGN_IN_ENABLED } from "@/lib/auth/pin-sign-in";
+import { PinSignInForm, SignInForm } from "./sign-in-form";
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -23,7 +24,8 @@ export default async function SignInPage({
         </p>
       </div>
 
-      {error ? (
+      {/* The stale-link notice only makes sense while links are the way in. */}
+      {error && !PIN_SIGN_IN_ENABLED ? (
         <p
           role="alert"
           className="rounded-[var(--radius-card)] border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-text"
@@ -33,7 +35,7 @@ export default async function SignInPage({
         </p>
       ) : null}
 
-      <SignInForm from={from} />
+      {PIN_SIGN_IN_ENABLED ? <PinSignInForm from={from} /> : <SignInForm from={from} />}
     </div>
   );
 }
