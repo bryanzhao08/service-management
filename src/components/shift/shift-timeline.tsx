@@ -21,6 +21,7 @@ import { IncidentSheet } from "@/components/shift/incident-sheet";
 import { MoreSheet } from "@/components/shift/more-sheet";
 import { PackageSheet } from "@/components/shift/package-sheet";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { capabilitiesFor } from "@/lib/sites/logging-mode";
 import { ElapsedTimer } from "@/components/ui/timer";
 import type { EntryType, LoggingMode } from "@/generated/prisma/enums";
@@ -247,6 +248,11 @@ export function ShiftTimeline({
             </p>
           </div>
           <SyncDot pending={pending} />
+          {canWrite && shift.clockInAt && !shift.clockOutAt ? (
+            <Button asChild variant="ghost" className="shrink-0 px-3">
+              <Link href={`/shift/${shift.id}/end`}>End shift</Link>
+            </Button>
+          ) : null}
         </div>
 
         {ongoing.length > 0 ? (
