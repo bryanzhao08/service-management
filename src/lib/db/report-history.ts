@@ -50,6 +50,19 @@ export type ReportHistoryRow = {
   generatedAt: Date | null;
   siteName: string;
   siteId: string;
+  /**
+   * The site's IANA zone, carried on the row so the list can print a
+   * wall-clock time without asking the browser what timezone it is in.
+   *
+   * Without it the only available default is the runtime's zone, which differs
+   * between the server (UTC) and the reader's machine — that is both a
+   * hydration mismatch and a lie, because the PDF for the same shift prints the
+   * site's time. A supervisor comparing the two would see two different clocks
+   * for one night.
+   *
+   * The CSV deliberately does not use this; see `reportsCsv`.
+   */
+  siteTimezone: string;
   guardName: string | null;
   incidentCount: number;
   bytes: number | null;
@@ -175,7 +188,7 @@ export async function listReports(
           select: {
             siteId: true,
             isEventNight: true,
-            site: { select: { name: true } },
+            site: { select: { name: true, timezone: true } },
             guard: { select: { name: true } },
             _count: {
               select: { entries: { where: { type: "INCIDENT", deletedAt: null } } },
@@ -201,6 +214,7 @@ export async function listReports(
         generatedAt: report.generatedAt,
         siteId: report.shift.siteId,
         siteName: report.shift.site.name,
+        siteTimezone: report.shift.site.timezone,
         guardName: report.shift.guard?.name ?? null,
         incidentCount: report.shift._count.entries,
         bytes: report.bytes,
@@ -263,6 +277,10 @@ export async function filterableSites(
  */
 export function reportsCsv(rows: readonly ReportHistoryRow[], capped = false): string {
   const body = rows.map((row) => [
+    // Deliberately the raw Date, which `csvCell` serialises as ISO-8601 with a
+    // `Z`. The screen renders site-local time because a human is reading it;
+    // this file gets parsed, sorted and archived, so it keeps the explicit
+    // offset instead. Both name the same instant, and neither is ambiguous.
     row.generatedAt,
     row.siteName,
     row.guardName ?? "",

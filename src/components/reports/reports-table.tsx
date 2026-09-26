@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import type { ReportHistoryRow } from "@/lib/db/report-history";
+import { formatDateTimeArchival } from "@/lib/time";
 import { formatBytes } from "@/lib/utils";
 
 /**
@@ -166,10 +167,7 @@ export function ReportsTable({
                 data-report-link
               >
                 {row.generatedAt
-                  ? row.generatedAt.toLocaleString(undefined, {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })
+                  ? formatDateTimeArchival(row.generatedAt, row.siteTimezone)
                   : "Not built"}
               </Link>
             ),
