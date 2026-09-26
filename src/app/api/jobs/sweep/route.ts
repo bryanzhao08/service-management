@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 
 import { jobCounts, runJobs } from "@/lib/jobs/runner";
 import { applyRetention } from "@/lib/jobs/retention";
+import { confirmConsoleDeliveries } from "@/lib/jobs/confirm-console";
+import { expireUnconfirmed } from "@/lib/db/deliveries";
 
 /**
  * `GET /api/jobs/sweep` (section 16), run every minute by the Vercel cron in
@@ -57,9 +59,22 @@ export async function GET(request: Request): Promise<Response> {
 
   const ran = await runJobs({ limit: 10 });
   const retention = await applyRetention();
+  // Console mode has no provider to send us a webhook, so the sweep plays the
+  // provider's part. Without this a local demo stops at SENT and the delivery
+  // half of the product is invisible on every machine that has no Resend key.
+  const confirmed = await confirmConsoleDeliveries();
+  // Runs *after* confirmation so a row that was about to be confirmed this
+  // same tick is not first declared unconfirmed and then contradicted.
+  const unconfirmed = await expireUnconfirmed();
 
   return NextResponse.json(
-    { ok: true, ...ran, retention, queue: await jobCounts() },
+    {
+      ok: true,
+      ...ran,
+      retention,
+      deliveries: { confirmed, unconfirmed },
+      queue: await jobCounts(),
+    },
     { headers: { "cache-control": "no-store" } },
   );
 }

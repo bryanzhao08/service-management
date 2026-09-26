@@ -34,7 +34,16 @@ export default defineConfig({
           // `lib/db/client.ts` reads DATABASE_URL at module load, so pointing
           // it here is what redirects the whole scoped layer at the test
           // database without the layer knowing it is under test.
-          env: { DATABASE_URL: TEST_DATABASE_URL },
+          env: {
+            DATABASE_URL: TEST_DATABASE_URL,
+            // A throwaway signing key. It must be *present* because the
+            // storage layer refuses to sign with an empty secret, and it must
+            // not be a real one, because a test that shares production's key
+            // can mint production links.
+            LINK_SIGNING_SECRET:
+              process.env["LINK_SIGNING_SECRET"] ??
+              "test-only-link-signing-secret-not-for-real-use",
+          },
           // One database, shared tables. Parallel files would truncate each
           // other's rows mid-assertion.
           fileParallelism: false,

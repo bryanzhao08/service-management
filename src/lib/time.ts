@@ -41,6 +41,18 @@ export function formatDateTimeArchival(
   return formatInTimeZone(when, timeZone, "EEE d MMM yyyy, HH:mm");
 }
 
+/**
+ * `2026-01-31` in the site's own timezone.
+ *
+ * Not `toISOString().slice(0, 10)`. A shift starting at 22:00 Pacific is
+ * already the next day in UTC, so the ISO shortcut names the attachment
+ * `2026-02-01` while the email subject above it says "Sat 31 Jan". The client
+ * filing it by date then has two answers for one night.
+ */
+export function isoDateInZone(when: Date, timeZone: string): string {
+  return formatInTimeZone(when, timeZone, "yyyy-MM-dd");
+}
+
 /** The hour bucket a timeline entry belongs to, e.g. `02:00`. */
 export function hourBucket(when: Date, timeZone: string): string {
   return formatInTimeZone(when, timeZone, "HH:00");

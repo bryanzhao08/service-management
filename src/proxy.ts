@@ -30,7 +30,14 @@ const PUBLIC_PATHS = [
 export default auth((req) => {
   const { pathname } = req.nextUrl;
 
-  const isPublic = PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/dev/");
+  const isPublic =
+    PUBLIC_PATHS.includes(pathname) ||
+    pathname.startsWith("/dev/") ||
+    // Provider callbacks carry no session cookie and never will. The route
+    // authenticates the *payload* with a Svix signature instead, which is a
+    // stronger check than a cookie would be: it proves the body was not
+    // altered, not merely that someone was logged in.
+    pathname.startsWith("/api/webhooks/");
 
   if (!req.auth && !isPublic) {
     // An API caller gets a status, not a login page. A 307 to HTML on a fetch

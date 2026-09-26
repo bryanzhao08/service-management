@@ -14,9 +14,26 @@ export type EmailMessage = {
   html: string;
   text: string;
   replyTo?: string;
-  /** Correlates a send with its `ReportDelivery` row once m7 wires webhooks. */
+  /** Correlates a send with its `ReportDelivery` row. Read back off webhooks. */
   tags?: Record<string, string>;
+  attachments?: EmailAttachment[];
 };
+
+export type EmailAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+};
+
+/**
+ * Hard ceiling on a single message.
+ *
+ * Resend rejects above 40MB and most corporate gateways bounce well before
+ * that, so the report renderer targets 8MB and this is the backstop that keeps
+ * an oversized attachment from turning into a silent provider error. Over the
+ * cap we send the email with a link instead of dropping the email.
+ */
+export const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 
 export type SendResult = {
   /** Provider message id. The receipt shows this, so it is never synthesised. */
@@ -45,12 +62,25 @@ export class ConsoleEmailProvider implements EmailProvider {
     await mkdir(OUTBOX_DIR, { recursive: true });
 
     const stem = path.join(OUTBOX_DIR, messageId);
+    // Attachments are summarised, never serialised. `...message` would put an
+    // 8MB PDF buffer through JSON.stringify and write a useless megabyte-scale
+    // file that no test can read and no human can open.
+    const { attachments, ...rest } = message;
     await Promise.all([
       writeFile(`${stem}.html`, message.html, "utf8"),
       writeFile(
         `${stem}.json`,
         JSON.stringify(
-          { messageId, sentAt: new Date().toISOString(), ...message },
+          {
+            messageId,
+            sentAt: new Date().toISOString(),
+            ...rest,
+            attachments: (attachments ?? []).map((a) => ({
+              filename: a.filename,
+              contentType: a.contentType,
+              bytes: a.content.byteLength,
+            })),
+          },
           null,
           2,
         ),
@@ -66,11 +96,77 @@ export class ConsoleEmailProvider implements EmailProvider {
   }
 }
 
+/**
+ * Resend. Only constructed when a key exists, so importing this module in a
+ * test or a keyless dev environment never reaches for the network.
+ *
+ * Tags carry the `ReportDelivery` id. That is the whole reason webhooks can be
+ * matched back to a row without trusting the recipient address, which is not
+ * unique across reports and changes when someone fixes a typo.
+ */
+export class ResendEmailProvider implements EmailProvider {
+  constructor(private readonly apiKey: string) {}
+
+  async send(message: EmailMessage): Promise<SendResult> {
+    const { Resend } = await import("resend");
+    const client = new Resend(this.apiKey);
+
+    const { data, error } = await client.emails.send({
+      from: process.env.EMAIL_FROM ?? "Transient <reports@transient.app>",
+      to: message.to,
+      subject: message.subject,
+      html: message.html,
+      text: message.text,
+      ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+      ...(message.tags
+        ? {
+            tags: Object.entries(message.tags).map(([name, value]) => ({
+              name,
+              value,
+            })),
+          }
+        : {}),
+      ...(message.attachments?.length
+        ? {
+            attachments: message.attachments.map((a) => ({
+              filename: a.filename,
+              content: a.content,
+              contentType: a.contentType,
+            })),
+          }
+        : {}),
+    });
+
+    // Resend reports failure in the body rather than by throwing, so a caller
+    // that only catches exceptions would record a send that never happened and
+    // then wait forever for a webhook that is never coming.
+    if (error) throw new Error(`resend: ${error.name}: ${error.message}`);
+    if (!data?.id) throw new Error("resend: send returned no message id");
+
+    return { messageId: data.id, provider: "resend" };
+  }
+}
+
 let cached: EmailProvider | undefined;
 
+/**
+ * Resend when a key is configured, the outbox otherwise.
+ *
+ * The fallback is not a convenience. Section 23 requires the whole app to run
+ * with no third-party account, so a missing key has to be an ordinary
+ * supported mode rather than a crash on the first report of the night.
+ */
 export function getEmailProvider(): EmailProvider {
-  cached ??= new ConsoleEmailProvider();
+  if (!cached) {
+    const key = process.env.RESEND_API_KEY;
+    cached = key ? new ResendEmailProvider(key) : new ConsoleEmailProvider();
+  }
   return cached;
+}
+
+/** True when sends are local-only, so callers can simulate delivery webhooks. */
+export function isConsoleEmail(): boolean {
+  return !process.env.RESEND_API_KEY;
 }
 
 /** Test seam: lets a unit test install a fake without touching the filesystem. */

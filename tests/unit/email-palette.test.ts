@@ -15,7 +15,12 @@ import { describe, expect, it } from "vitest";
 
 const root = process.cwd();
 const css = readFileSync(path.join(root, "src/app/globals.css"), "utf8");
-const template = readFileSync(path.join(root, "src/lib/email/templates.ts"), "utf8");
+// Both email templates, because the fork this test exists to catch can open in
+// either one. Scanning only the older plain-HTML file let the React template
+// ship two invented shades.
+const template = ["src/lib/email/templates.ts", "src/lib/email/report-email.tsx"]
+  .map((f) => readFileSync(path.join(root, f), "utf8"))
+  .join("\n");
 
 /** Reads a `--name: #rrggbb` primitive out of globals.css. */
 function token(name: string): string {
@@ -45,7 +50,21 @@ describe("email palette", () => {
 
   it("uses only colours that exist in the design tokens", () => {
     const known = new Set(
-      ["color-ink", "color-cream", "color-lime", "color-forest"].map(token),
+      [
+        "color-ink",
+        "color-cream",
+        "color-lime",
+        "color-forest",
+        // Metadata lines and ungraded incidents. Muted, but still a token:
+        // the point of this list is that the email cannot mix its own shade.
+        "color-khaki",
+        // Incident severity. The colour only reinforces the level; the label
+        // next to it always spells it out, so a reader who cannot tell copper
+        // from ember still gets the grade.
+        "color-bark",
+        "color-ember",
+        "color-copper",
+      ].map(token),
     );
     const unknown = [...templateHexes()].filter((hex) => !known.has(hex));
 

@@ -628,6 +628,12 @@ model ReportDelivery {
   report    Report     @relation(fields: [reportId], references: [id], onDelete: Cascade)
   recipient Recipient? @relation(fields: [recipientId], references: [id], onDelete: SetNull)
 
+  /// One delivery row per recipient per report, so the retry that makes this
+  /// job durable cannot double every delivery. Without it `skipDuplicates` has
+  /// nothing to skip on and a second attempt silently creates a second set.
+  /// Postgres treats NULLs as distinct, so this constrains the create path
+  /// (which always has a recipient) and not rows orphaned by a later delete.
+  @@unique([reportId, recipientId])
   @@index([reportId])
   @@index([recipientId])
   @@index([providerMessageId])
