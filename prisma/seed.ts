@@ -229,31 +229,11 @@ async function main() {
     },
   ]);
 
-  // ---- Site 2: Hillcrest Middle School -------------------------------------
-
-  const school = await prisma.site.upsert({
-    where: { companyId_code: { companyId: company.id, code: "HMS" } },
-    update: {},
-    create: {
-      companyId: company.id,
-      name: "Hillcrest Middle School",
-      code: "HMS",
-      address: "1120 Hillcrest Avenue, Inglewood, CA 90301",
-      timezone: "America/Los_Angeles",
-      // VERBAL: the guard reports in person at handoff, so there are no email
-      // recipients and no delivery tracking for this site.
-      loggingMode: LoggingMode.VERBAL,
-    },
-  });
-
-  await upsertShiftTemplates(school.id, [["Day", "07:00", "15:00"]]);
-
   // ---- Assignments ---------------------------------------------------------
 
   const assignments: Array<[string, string]> = [
     ["sup.westside@meridian.test", hotel.id],
     ["guard.night@meridian.test", hotel.id],
-    ["guard.night@meridian.test", school.id],
     ["guard.swing@meridian.test", hotel.id],
   ];
 
@@ -299,8 +279,10 @@ async function main() {
     }[state];
   }
 
+  const siteCount = await prisma.site.count({ where: { companyId: company.id } });
+
   console.log(
-    `Seeded ${company.name}: ${users.length} users, 2 sites, ${assignments.length} assignments.`,
+    `Seeded ${company.name}: ${users.length} users, ${siteCount} ${siteCount === 1 ? "site" : "sites"}, ${assignments.length} assignments.`,
   );
   console.log(`Sample shift: ${reportLine}.`);
 }

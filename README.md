@@ -74,8 +74,8 @@ image still produces a perfectly valid screenshot otherwise.
 
 ## Demo data
 
-`pnpm db:seed` gives you a guard company, two sites (a hotel on `FULL` logging
-and a school on `VERBAL`), three shifts, and four accounts you can sign in as:
+`pnpm db:seed` gives you a guard company, one site — Westside Hotel, on `FULL`
+logging — three shifts, and four accounts you can sign in as:
 
 | Account | Role | What they see |
 | --- | --- | --- |
@@ -398,9 +398,9 @@ await upsertRecipients(site.id, [
 posts that mostly need presence, or `VERBAL` for dictation-first. Blind spots
 are surfaced to the guard as known gaps in camera coverage rather than hidden
 in a config file. `sendIndividually` gives each recipient their own delivery
-row, so one bounce does not hide behind three successes — the second seeded
-site deliberately has neither recipients nor delivery tracking, so both paths
-are exercised.
+row, so one bounce does not hide behind three successes — the seeded hotel
+includes a deliberately bad address so the bounce path is exercised on a fresh
+database rather than only in production.
 
 Everything is scoped to the company on the session. A user from one company
 cannot read another's sites — `tests/db/` asserts that directly, and
