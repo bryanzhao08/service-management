@@ -29,11 +29,11 @@ type PresignInput = {
   ttlSeconds?: number;
 };
 
-const presignUpload = vi.fn(async (_input: PresignInput) => ({
+const presignUpload = vi.fn(async (input: PresignInput) => ({
   url: "https://example.test/signed",
-  key: "k",
+  key: input.key,
   method: "PUT" as const,
-  headers: { "content-type": "image/jpeg" },
+  headers: { "content-type": input.contentType },
   expiresAt: new Date().toISOString(),
 }));
 

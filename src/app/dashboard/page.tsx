@@ -314,14 +314,25 @@ function RecentReports({ reports }: { reports: RecentReport[] }) {
                 className="flex items-center justify-between gap-4 py-3"
               >
                 <div className="min-w-0">
-                  <Link href={`/reports/${report.id}`} className="block min-w-0">
+                  <a
+                    // A plain anchor, not a Link, for the same reason as the
+                    // CSV export: this returns a file. It used to point at
+                    // `/reports/${report.id}`, which no route ever served, so
+                    // every row in this card was a 404 -- and because Next
+                    // prefetches Links, it 404'd on hover without anyone
+                    // clicking. The PDF is the report as far as a reader is
+                    // concerned, so link the artifact rather than build a
+                    // second rendering of it.
+                    href={`/api/reports/${report.id}/pdf`}
+                    className="block min-w-0"
+                  >
                     <span className="block truncate text-text">
                       {report.shift.site.name}
                     </span>
                     <span className="block text-sm text-text-muted">
                       {formatClock(report.createdAt, report.shift.site.timezone)}
                     </span>
-                  </Link>
+                  </a>
                 </div>
                 <Badge tone={bounced ? "danger" : delivered ? "primary" : "neutral"}>
                   {bounced ? "Bounced" : delivered ? "Delivered" : "Sent"}
