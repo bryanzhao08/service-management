@@ -158,7 +158,7 @@ a working local fallback, which is what lets the quick start run offline.
 | `RESEND_WEBHOOK_SECRET` | optional | Verifies delivery webhooks. |
 | `STORAGE_DRIVER` | yes | `local` or `s3`. |
 | `S3_ENDPOINT` `S3_REGION` `S3_BUCKET` `S3_ACCESS_KEY_ID` `S3_SECRET_ACCESS_KEY` `S3_FORCE_PATH_STYLE` | if `s3` | Any S3-compatible service. |
-| `S3_SESSION_TOKEN` | no | Only for temporary credentials: AWS STS or an assumed IAM role. Long-lived keys (R2, MinIO) leave it unset. |
+| `S3_SESSION_TOKEN` | no | Only for temporary credentials: AWS STS or an assumed IAM role. Long-lived keys (Neon, R2, MinIO) leave it unset. |
 | `VAPID_PUBLIC_KEY` `VAPID_PRIVATE_KEY` `NEXT_PUBLIC_VAPID_PUBLIC_KEY` `VAPID_SUBJECT` | optional | Web Push. Absent → push is skipped and logged. `pnpm gen:vapid`. |
 | `SWEEP_URL` | optional | Override the URL `pnpm jobs:sweep` calls. |
 
@@ -183,30 +183,51 @@ S3_FORCE_PATH_STYLE=true      # MinIO and R2 need this; AWS does not
 
 For real S3 drop `S3_ENDPOINT`, set `S3_REGION`, and leave path style off.
 
-**Cloudflare R2** is what the deployed build uses. It is S3-compatible with
-long-lived keys, so `S3_SESSION_TOKEN` stays unset. Create the bucket, then an
-R2 API token (Account → R2 → Manage API Tokens) scoped to Object Read & Write;
-that screen is the only place the secret is shown.
+**Neon Object Storage** is what the deployed build uses, because the database
+already lives there and it keeps the deploy to one provider. The bucket is
+declared in [`neon.ts`](./neon.ts) rather than clicked into existence:
+
+```ts
+export default defineConfig({
+  buckets: { media: { access: "private" } },
+});
+```
+
+`neon config plan` shows the diff, `neon config apply` creates the bucket and
+writes `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3` and
+`AWS_REGION` into `.env`. Those are AWS-conventional names; this app reads the
+`S3_*` block, so copy them across:
 
 ```bash
 STORAGE_DRIVER=s3
-S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
-S3_REGION=auto
-S3_BUCKET=transient-media
-S3_ACCESS_KEY_ID=<R2 access key id>
-S3_SECRET_ACCESS_KEY=<R2 secret access key>
-S3_FORCE_PATH_STYLE=true
+S3_ENDPOINT=https://<branch-id>.storage.<region>.aws.neon.tech
+S3_REGION=us-east-1
+S3_BUCKET=media
+S3_ACCESS_KEY_ID=<AWS_ACCESS_KEY_ID from .env>
+S3_SECRET_ACCESS_KEY=<AWS_SECRET_ACCESS_KEY from .env>
 ```
 
-R2's region is the literal string `auto`, and egress is free, which is the
-reason to prefer it here: this app serves photo galleries and report PDFs to
-clients, so egress is the cost that would otherwise grow with usage.
+Two things to know. The endpoint is **branch-scoped** — a Neon branch gets its
+own storage host, so a preview branch needs its own `S3_ENDPOINT` and will not
+see production's objects. And Object Storage is region-limited (`us-east-1`,
+`us-east-2`, `eu-central-1`, `ap-southeast-1`), so a project outside those
+regions cannot enable it.
+
+`access: "private"` is load-bearing. Every object is reached through a presigned
+URL that the app mints only after checking the caller's company scope; a public
+bucket would make that check decorative.
+
+**Cloudflare R2** is the drop-in alternative and the better choice if egress
+grows, since R2 charges none. Create the bucket, then an R2 API token (Account →
+R2 → Manage API Tokens) scoped to Object Read & Write — that screen is the only
+place the secret is shown. Its region is the literal string `auto`, and it needs
+`S3_FORCE_PATH_STYLE=true`. Nothing else changes: the driver is provider-
+agnostic, so switching is these six variables and a redeploy.
 
 Some providers issue *temporary* credentials instead, signing with three fields
-rather than two — AWS STS, an assumed IAM role, or Supabase Storage (access key
-id = project ref, secret = anon key, `S3_SESSION_TOKEN` = service-role JWT).
-Handed only the first two those answer `InvalidAccessKeyId` on every request.
-R2 does not need this.
+rather than two — AWS STS or an assumed IAM role. Handed only the first two,
+those answer `InvalidAccessKeyId` on every request, which is what
+`S3_SESSION_TOKEN` exists for. Neither Neon nor R2 needs it.
 
 Add the bucket's public origin to the CSP in `next.config.ts` — the config
 already threads a `storageOrigin` into `img-src`, `media-src` and `connect-src`
@@ -282,15 +303,23 @@ cannot read another's sites — `tests/db/` asserts that directly, and
 ## Deploying to Vercel
 
 1. Push the repo and import it. Framework detection handles the build.
-2. Provision Postgres (Neon is what this deploy uses) and set `DATABASE_URL`.
-   Migrations do not run themselves — apply them with
-   `DATABASE_URL=<direct url> pnpm db:deploy` before the first request.
+2. Provision Postgres and set `DATABASE_URL`. On a Vercel-managed Neon org the
+   Neon CLI cannot create projects (`action restricted`); use
+   `vercel integration add neon`, which provisions the database and writes
+   `DATABASE_URL` into the project for you. Migrations do not run themselves —
+   apply them with `DATABASE_URL="$DATABASE_URL_UNPOOLED" pnpm db:deploy`
+   before the first request. The unpooled URL is required because the pooler
+   does not carry DDL.
 3. Set every **required** variable above. `AUTH_URL` and `NEXT_PUBLIC_APP_URL`
    must be the real `https://` origin — CSP emits
    `upgrade-insecure-requests` only when they are https, so an http value
-   quietly opts out.
+   quietly opts out. Both are read at build time, so the first deploy of a new
+   project is necessarily a throwaway: deploy once to learn the domain, set
+   them, then deploy again.
 4. Set `STORAGE_DRIVER=s3` with real credentials. The local driver writes to
-   the filesystem, which does not survive a serverless instance.
+   the filesystem, which does not survive a serverless instance. Set
+   `S3_ENDPOINT` **before** that build — `next.config.ts` bakes it into the CSP
+   at build time, so setting it afterwards leaves every image blocked.
 5. Set `RESEND_API_KEY` and point the Resend webhook at
    `https://<your-domain>/api/webhooks/resend`.
 6. Add a cron for the sweep. In `vercel.json`:
@@ -303,6 +332,11 @@ cannot read another's sites — `tests/db/` asserts that directly, and
    in this repo applies migrations automatically — run `pnpm db:deploy`
    against the production database **before** promoting a build that needs a
    new column.
+7. Create the first account. Transient has **no self-registration** by design,
+   so a fresh deployment has nobody who can sign in and the sign-in form will
+   answer identically whether or not the address exists. Run `pnpm db:seed`
+   against the production database, or insert a `Company` and an admin `User`
+   by hand, before expecting anyone to get in.
 
 ## Testing
 

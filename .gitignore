@@ -56,3 +56,9 @@ next-env.d.ts
 # Playwright run artifacts: traces and failure snapshots, regenerated every run.
 /test-results/
 /playwright-report/
+
+# Agent skill installs (vendor docs, re-fetchable with `npx neon@latest skills`).
+/.agents/
+/.claude/
+/skills-lock.json
+.neon

@@ -287,6 +287,9 @@ importers:
       '@axe-core/playwright':
         specifier: ^4.13.0
         version: 4.13.0(playwright-core@1.63.0)
+      '@neon/config':
+        specifier: ^1.7.3
+        version: 1.7.3
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
@@ -1066,6 +1069,14 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1 || ^2.0.0-alpha.4
       '@emnapi/runtime': ^1.7.1 || ^2.0.0-alpha.4
+
+  '@neon/config@1.7.3':
+    resolution: {integrity: sha512-LlebODzVn0A9BUaHJpSpCwwKo2Psw2RQf3hpFJoKmJk3Lw82DqaXuTdFmTfRd2+K5IcX+H6OCss2VqqNqTTpiQ==}
+    engines: {node: '>=20.19.0'}
+
+  '@neon/sdk@6.1.0':
+    resolution: {integrity: sha512-4HtXNOURpcNqJbBBytSIjiZ1O3wnEmxjDlrUBu6zPT/MH1GutDQ91XcJLY4tMklIoK0qQmmiuqIlAGexekZSjQ==}
+    engines: {node: '>=20.19.0'}
 
   '@next/env@16.3.6':
     resolution: {integrity: sha512-x9Vblze1EbtltQYnNH38xCPWU3TVfBd1eXqA3+w9+BTpedkkdNpAaltXlGQ/nsc1+E0mVTNrtcbX3GoO09zeLQ==}
@@ -6141,6 +6152,14 @@ snapshots:
       '@emnapi/runtime': 1.10.0
       '@tybys/wasm-util': 0.10.4
     optional: true
+
+  '@neon/config@1.7.3':
+    dependencies:
+      '@neon/sdk': 6.1.0
+      jiti: 2.7.0
+      zod: 4.6.5
+
+  '@neon/sdk@6.1.0': {}
 
   '@next/env@16.3.6': {}
 
