@@ -11,8 +11,10 @@ import {
   type DeliveryFilter,
   filterableSites,
   listReports,
+  retentionHorizon,
   REPORTS_PAGE_SIZE,
 } from "@/lib/db/report-history";
+import { companySubscription } from "@/lib/db/billing";
 
 export const metadata: Metadata = { title: "Reports" };
 
@@ -67,6 +69,9 @@ export default async function ReportsPage({
 
   const page = Math.max(0, Number.parseInt(one(params.page) ?? "0", 10) || 0);
 
+  const subscription = await companySubscription(actor.companyId);
+  const notBefore = retentionHorizon(subscription.retentionMonths);
+
   const filters = {
     siteId: one(params.site),
     from: parseDay(one(params.from)),
@@ -74,6 +79,7 @@ export default async function ReportsPage({
     delivery,
     eventNight: one(params.event) === "1",
     hasIncidents: one(params.incidents) === "1",
+    notBefore,
   };
 
   const [{ rows, total, hasMore }, sites] = await Promise.all([

@@ -8,8 +8,10 @@ import {
   auditActors,
   canViewAudit,
   listAuditEvents,
+  parseAuditDay as parseDay,
   AUDIT_PAGE_SIZE,
 } from "@/lib/db/audit";
+import { companyHasEntitlement } from "@/lib/db/billing";
 
 export const metadata: Metadata = { title: "Activity" };
 
@@ -20,24 +22,6 @@ export const metadata: Metadata = { title: "Activity" };
  * from a 404; a 403 confirms the route exists and that they are inside a
  * company that has one, which is a small leak but a free one to close.
  */
-function parseDay(value: string | undefined, endOfDay = false): Date | undefined {
-  if (!value) return undefined;
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return undefined;
-  // Local midnight, not UTC. `new Date("2026-03-01")` is UTC midnight, which
-  // in California is 4pm the day before — so a "from" filter would silently
-  // include the previous evening's activity.
-  const [, y, m, d] = match;
-  return new Date(
-    Number(y),
-    Number(m) - 1,
-    Number(d),
-    endOfDay ? 23 : 0,
-    endOfDay ? 59 : 0,
-    endOfDay ? 59 : 0,
-    endOfDay ? 999 : 0,
-  );
-}
 
 export default async function AuditPage({
   searchParams,
@@ -62,10 +46,11 @@ export default async function AuditPage({
     to: parseDay(one("to"), true),
   };
 
-  const [{ rows, total, hasMore }, actors, actions] = await Promise.all([
+  const [{ rows, total, hasMore }, actors, actions, canExport] = await Promise.all([
     listAuditEvents(actor, filters, page),
     auditActors(actor),
     auditActionsPresent(actor),
+    companyHasEntitlement(actor.companyId, "audit_export"),
   ]);
 
   const query = new URLSearchParams();
@@ -82,13 +67,31 @@ export default async function AuditPage({
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-4 pb-16" data-audit-page>
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold text-text">Activity</h1>
-        <p className="text-sm text-text-muted" data-audit-total={total}>
-          {total === 0
-            ? "Nothing recorded yet."
-            : `${total} ${total === 1 ? "event" : "events"} across the company.`}
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold text-text">Activity</h1>
+          <p className="text-sm text-text-muted" data-audit-total={total}>
+            {total === 0
+              ? "Nothing recorded yet."
+              : `${total} ${total === 1 ? "event" : "events"} across the company.`}
+          </p>
+        </div>
+        {/*
+          Rendered only when the plan includes it. The route refuses
+          independently with a 402, so this is presentation, not the gate —
+          but offering a download that answers "not your plan" is a worse
+          experience than not offering it, and it is the kind of dead control
+          that teaches people to distrust the rest of the screen.
+        */}
+        {canExport ? (
+          <a
+            className="text-sm text-text underline"
+            href={`/api/audit/export${query.toString() ? `?${query}` : ""}`}
+            data-audit-export
+          >
+            Export CSV
+          </a>
+        ) : null}
       </header>
 
       <AuditTable

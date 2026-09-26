@@ -297,3 +297,57 @@ export async function notifiedSince(params: {
   });
   return existing !== null;
 }
+
+/**
+ * Everything needed to alert on a high-severity incident, in one read.
+ *
+ * Returns null when the incident is gone, which is the same shape
+ * `handoffContext` uses: the caller is best-effort and a missing row is not a
+ * failure to retry against.
+ *
+ * The category label comes from the site's own entry types when the incident
+ * used one, and falls back to the built-in category key otherwise, so a site
+ * that renamed "Suspicious person" gets its own words in the alert rather
+ * than ours.
+ */
+export async function incidentAlertContext(incidentId: string): Promise<{
+  companyId: string;
+  siteName: string;
+  shiftId: string;
+  code: string;
+  categoryLabel: string;
+  supervisorIds: string[];
+} | null> {
+  const incident = await prisma.incident.findUnique({
+    where: { id: incidentId },
+    select: {
+      code: true,
+      categoryKey: true,
+      siteEntryType: { select: { label: true } },
+      // The shift hangs off the entry, not off the incident: an incident IS
+      // an entry with extra columns, so `entry.shift` is the only path.
+      entry: {
+        select: {
+          shiftId: true,
+          shift: { select: { site: { select: { name: true, companyId: true } } } },
+        },
+      },
+    },
+  });
+  if (!incident) return null;
+
+  const companyId = incident.entry.shift.site.companyId;
+  const supervisors = await prisma.user.findMany({
+    where: { companyId, role: { in: ["SUPERVISOR", "ADMIN", "OWNER"] } },
+    select: { id: true },
+  });
+
+  return {
+    companyId,
+    siteName: incident.entry.shift.site.name,
+    shiftId: incident.entry.shiftId,
+    code: incident.code,
+    categoryLabel: incident.siteEntryType?.label ?? incident.categoryKey,
+    supervisorIds: supervisors.map((user) => user.id),
+  };
+}

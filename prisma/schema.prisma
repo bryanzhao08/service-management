@@ -33,6 +33,23 @@ enum Role {
   OWNER
 }
 
+/// Where a company's subscription stands.
+///
+/// Deliberately does not include a "none" member: absence is modelled by a
+/// null `planId`, so a company that never subscribed and a company whose plan
+/// was removed are the same state rather than two states that drift apart.
+///
+/// PAST_DUE is separate from CANCELED because they mean different things to a
+/// guard mid-shift. Neither one stops the recording (see ALWAYS_INCLUDED in
+/// lib/billing/plans.ts), but only one of them is worth interrupting an
+/// administrator about.
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
 enum LoggingMode {
   FULL
   LIGHT
@@ -159,8 +176,30 @@ model Company {
   /// null means keep everything. Set to N to auto-delete media after N days
   /// while keeping the generated PDF.
   retentionDays Int?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+
+  /// Which published plan this company is on, as a `PlanId` string from
+  /// lib/billing/plans.ts.
+  ///
+  /// A string rather than an enum on purpose. Plans are a commercial artifact
+  /// that changes on a marketing cadence, and making every price experiment a
+  /// schema migration is how a pricing page ends up lying because nobody
+  /// wanted to ship a migration on a Friday. `planById` throws on an unknown
+  /// id, so a typo surfaces immediately instead of silently granting nothing.
+  ///
+  /// Null is a real, supported state: never subscribed, or subscribed and
+  /// gone. It resolves to no extras and never to no product.
+  planId             String?
+  subscriptionStatus SubscriptionStatus?
+  /// When the free trial runs out. Null once a trial has converted or when
+  /// one never started.
+  trialEndsAt        DateTime?
+  /// End of the paid period currently covered. Read for display only; nothing
+  /// in the app blocks on it, because a lapsed card must never be the reason
+  /// an incident goes unrecorded.
+  currentPeriodEnd   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   users       User[]
   sites       Site[]

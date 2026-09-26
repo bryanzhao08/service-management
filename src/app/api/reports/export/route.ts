@@ -6,7 +6,9 @@ import {
   type DeliveryFilter,
   reportsCsv,
   reportsForExport,
+  retentionHorizon,
 } from "@/lib/db/report-history";
+import { companySubscription } from "@/lib/db/billing";
 import { csvFilename, csvResponseHeaders } from "@/lib/export/csv";
 
 /**
@@ -48,7 +50,10 @@ export async function GET(request: Request) {
       : new Date(y, m - 1, d, 0, 0, 0, 0);
   };
 
+  const subscription = await companySubscription(actor.companyId);
+
   const { rows, capped } = await reportsForExport(actor, {
+    notBefore: retentionHorizon(subscription.retentionMonths),
     siteId: get("site"),
     from: parseDay(get("from")),
     to: parseDay(get("to"), true),

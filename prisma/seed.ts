@@ -1,7 +1,12 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
-import { LoggingMode, RecipientStatus, Role } from "../src/generated/prisma/enums";
+import {
+  LoggingMode,
+  RecipientStatus,
+  Role,
+  SubscriptionStatus,
+} from "../src/generated/prisma/enums";
 
 /**
  * Seed — section 20. Users, sites and configuration only.
@@ -50,10 +55,27 @@ const REPORT_SECTIONS = [
 ];
 
 async function main() {
+  // Meridian sits on a real plan so the billing screen, the gated push alert
+  // and the audit export are all exercised by the demo rather than being
+  // dead code nobody clicks. TRIALING with a future end date is also the
+  // state a real new customer is in on day one, which is the state most
+  // worth having a screenshot of.
+  const trialEndsAt = new Date(Date.now() + 18 * 24 * 60 * 60 * 1000);
+  const subscription = {
+    planId: "operations",
+    subscriptionStatus: SubscriptionStatus.TRIALING,
+    trialEndsAt,
+    currentPeriodEnd: trialEndsAt,
+  } as const;
+
   const company = await prisma.company.upsert({
     where: { slug: "meridian" },
-    update: { name: "Meridian Protective Services" },
-    create: { name: "Meridian Protective Services", slug: "meridian" },
+    update: { name: "Meridian Protective Services", ...subscription },
+    create: {
+      name: "Meridian Protective Services",
+      slug: "meridian",
+      ...subscription,
+    },
   });
 
   const users = await Promise.all(

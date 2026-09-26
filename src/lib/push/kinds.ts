@@ -18,7 +18,8 @@ export type NotificationKind =
   | "REPORT_BOUNCED"
   | "REPORT_FAILED"
   | "HANDOFF_WAITING"
-  | "RECIPIENT_UNVERIFIED_REMINDER";
+  | "RECIPIENT_UNVERIFIED_REMINDER"
+  | "INCIDENT_HIGH_SEVERITY";
 
 export type NotificationContent = {
   kind: NotificationKind;
@@ -104,6 +105,32 @@ export function handoffWaiting(params: {
     kind: "HANDOFF_WAITING",
     title: "Someone is waiting for handoff",
     body: `${params.incomingGuardName} clocked in at ${params.siteName}.`,
+    url: `/shift/${params.shiftId}`,
+    urgent: true,
+  };
+}
+
+/**
+ * A high-severity incident, to the supervisors responsible for that site.
+ *
+ * Urgent, and the only notification in this file that is gated by a plan.
+ * That gate is about *who gets buzzed*, never about whether the incident was
+ * recorded: the entry, the photos and the report are written identically on
+ * every plan including none at all.
+ *
+ * Leads with the site, because a supervisor covering six buildings reads the
+ * first two words and needs to know where before they need to know what.
+ */
+export function incidentHighSeverity(params: {
+  siteName: string;
+  categoryLabel: string;
+  code: string;
+  shiftId: string;
+}): NotificationContent {
+  return {
+    kind: "INCIDENT_HIGH_SEVERITY",
+    title: `${params.siteName}: high-severity incident`,
+    body: `${params.categoryLabel} logged as ${params.code}.`,
     url: `/shift/${params.shiftId}`,
     urgent: true,
   };

@@ -30,6 +30,11 @@ export const DELIVERY_FILTER_LABELS: Record<DeliveryFilter, string> = {
 };
 
 export type ReportFilters = {
+  /**
+   * Hard floor on how far back to look, set by the plan and never by a query
+   * string. Applied together with `from`, taking whichever is later.
+   */
+  notBefore?: Date;
   siteId?: string;
   from?: Date;
   to?: Date;
@@ -91,16 +96,46 @@ function deliveryWhere(filter: DeliveryFilter): Prisma.ReportWhereInput | undefi
   }
 }
 
+/** The later of two optional dates, which is the narrower window. */
+function laterOf(a: Date | undefined, b: Date | undefined): Date | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  return a.getTime() >= b.getTime() ? a : b;
+}
+
+/**
+ * The oldest clock-in a plan will show in report history.
+ *
+ * Months back from now, computed on the calendar rather than in milliseconds,
+ * so "12 months" lands on the same day of the month instead of drifting by
+ * the number of 31-day months in between.
+ */
+export function retentionHorizon(months: number, now = new Date()): Date {
+  const horizon = new Date(now);
+  horizon.setMonth(horizon.getMonth() - months);
+  return horizon;
+}
+
 function buildWhere(actor: Actor, filters: ReportFilters): Prisma.ReportWhereInput {
+  const effectiveFrom = laterOf(filters.from, filters.notBefore);
   const shift: Prisma.ShiftWhereInput = {
     ...visible.shift(actor),
     ...(actor.role === "GUARD" ? { guardId: actor.userId } : {}),
     ...(filters.siteId ? { siteId: filters.siteId } : {}),
     ...(filters.eventNight ? { isEventNight: true } : {}),
-    ...(filters.from || filters.to
+    // `notBefore` is the plan's retention horizon and is applied with the
+    // user's own `from` by taking the later of the two. It is a separate
+    // field rather than a default for `from` so that no query string can
+    // widen it: a caller can only ever narrow the window from here.
+    //
+    // What this limits is *browsing history inside the product*. It does not
+    // touch a report that was already delivered — the client has that PDF in
+    // their inbox and nothing here can reach it — and the floor in
+    // `EVIDENCE_FLOOR_MONTHS` means the horizon is never less than a year.
+    ...(effectiveFrom || filters.to
       ? {
           clockInAt: {
-            ...(filters.from ? { gte: filters.from } : {}),
+            ...(effectiveFrom ? { gte: effectiveFrom } : {}),
             ...(filters.to ? { lte: filters.to } : {}),
           },
         }

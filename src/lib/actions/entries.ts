@@ -7,6 +7,7 @@ import { EntryType, IncidentStatus, Severity } from "@/generated/prisma/enums";
 import { requireActor } from "@/lib/auth/guards";
 import { record as recordAudit } from "@/lib/db/audit";
 import { NotVisibleError, db } from "@/lib/db/scoped";
+import { notifyHighSeverityIncident } from "@/lib/jobs/notify-shift";
 
 /**
  * Timeline actions (sections 9.3 and 16): notes, incidents and packages.
@@ -226,6 +227,13 @@ export async function createIncident(
       transcriptRaw: parsed.data.transcriptRaw ?? null,
       areaId: parsed.data.areaId ?? null,
     });
+    // After the incident is saved, never before, and never awaited into the
+    // guard's result. A supervisor's phone is a courtesy; the record is the
+    // product. `notifyHighSeverityIncident` swallows its own errors, so this
+    // cannot turn a logged incident into a failed action.
+    if (parsed.data.severity === Severity.HIGH) {
+      await notifyHighSeverityIncident({ incidentId: incident.id });
+    }
     revalidatePath(`/shift/${parsed.data.shiftId}`);
     return {
       incidentId: incident.id,

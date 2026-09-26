@@ -1,12 +1,21 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { Role } from "@/generated/prisma/enums";
+import {
+  EntryType,
+  Role,
+  Severity,
+  SubscriptionStatus,
+} from "@/generated/prisma/enums";
 import {
   handoffContext,
   notifiedSince,
   sitesWithUnverifiedRecipients,
 } from "@/lib/db/notifications";
-import { remindUnverifiedRecipients } from "@/lib/jobs/notify-shift";
+import { setCompanyPlan } from "@/lib/db/billing";
+import {
+  notifyHighSeverityIncident,
+  remindUnverifiedRecipients,
+} from "@/lib/jobs/notify-shift";
 
 import { createTenant, raw, resetDatabase } from "./helpers";
 
@@ -325,5 +334,146 @@ describe("notifiedSince", () => {
         since,
       }),
     ).toBe(false);
+  });
+});
+
+/**
+ * The one notification a plan is allowed to switch off.
+ *
+ * `notify()` writes its `Notification` row before it touches a push service,
+ * so the in-app record is observable here even with no VAPID keys configured.
+ * That is what makes "did the gate stop it" answerable: a gated-off alert
+ * leaves no row at all, while an entitled one leaves a row per supervisor.
+ *
+ * Both directions are asserted on the same incident shape, because "nothing
+ * happened" is also exactly what a broken query looks like.
+ */
+describe("high-severity incident alerts", () => {
+  async function highSeverityIncident(
+    tenant: Awaited<ReturnType<typeof createTenant>>,
+    clientId: string,
+  ) {
+    const entry = await raw.entry.create({
+      data: {
+        shiftId: tenant.shift.id,
+        type: EntryType.INCIDENT,
+        text: "Forced entry at the loading dock.",
+        occurredAt: new Date(),
+        clientId,
+      },
+    });
+    return raw.incident.create({
+      data: {
+        entryId: entry.id,
+        code: `${clientId}-code`,
+        categoryKey: "access",
+        severity: Severity.HIGH,
+      },
+    });
+  }
+
+  it("stays silent for a company whose plan does not include push alerts", async () => {
+    const incident = await highSeverityIncident(a, "alert-gated");
+
+    const result = await notifyHighSeverityIncident({ incidentId: incident.id });
+
+    expect(result.reason).toBe("not-entitled");
+    expect(result.notified).toBe(0);
+    expect(await raw.notification.count()).toBe(0);
+  });
+
+  it("alerts every supervisor once the plan includes push alerts", async () => {
+    // Same incident shape, same company, one thing changed. If this passed
+    // without the plan change, the test above would be proving nothing.
+    await setCompanyPlan(a.company.id, {
+      planId: "operations",
+      status: SubscriptionStatus.ACTIVE,
+    });
+
+    const supervisor = await raw.user.create({
+      data: {
+        companyId: a.company.id,
+        email: "sup@noti-a.test",
+        name: "Supervisor",
+        role: Role.SUPERVISOR,
+        assignments: { create: { siteId: a.site.id } },
+      },
+    });
+
+    const incident = await highSeverityIncident(a, "alert-entitled");
+    const result = await notifyHighSeverityIncident({ incidentId: incident.id });
+
+    expect(result.reason).toBeUndefined();
+    // Two: the supervisor and the company owner. An owner hearing about a
+    // forced entry at 3am is the point of the feature, so this asserts both
+    // rather than only the obvious one.
+    expect(result.notified).toBe(2);
+    expect(await raw.notification.count({ where: { userId: a.owner.id } })).toBe(1);
+
+    const rows = await raw.notification.findMany({ where: { userId: supervisor.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.type).toBe("INCIDENT_HIGH_SEVERITY");
+    // The site goes in the title, which is the line a locked phone shows. A
+    // supervisor covering four properties has to know whether this is theirs
+    // without unlocking anything.
+    expect(rows[0]!.title).toContain(a.site.name);
+    // And the body has to carry the code, so the alert and the report can be
+    // matched up later without guessing from a timestamp.
+    expect(rows[0]!.body).toContain("alert-entitled-code");
+    // Tapping it has to land on the shift, not on a list.
+    expect(rows[0]!.url).toBe(`/shift/${a.shift.id}`);
+
+    await raw.company.update({
+      where: { id: a.company.id },
+      data: { planId: null, subscriptionStatus: null },
+    });
+  });
+
+  it("does not alert a supervisor at another company", async () => {
+    await setCompanyPlan(a.company.id, {
+      planId: "operations",
+      status: SubscriptionStatus.ACTIVE,
+    });
+    await setCompanyPlan(b.company.id, {
+      planId: "operations",
+      status: SubscriptionStatus.ACTIVE,
+    });
+
+    const mine = await raw.user.create({
+      data: {
+        companyId: a.company.id,
+        email: "sup2@noti-a.test",
+        name: "Mine",
+        role: Role.SUPERVISOR,
+        assignments: { create: { siteId: a.site.id } },
+      },
+    });
+    const theirs = await raw.user.create({
+      data: {
+        companyId: b.company.id,
+        email: "sup2@noti-b.test",
+        name: "Theirs",
+        role: Role.SUPERVISOR,
+        assignments: { create: { siteId: b.site.id } },
+      },
+    });
+
+    const incident = await highSeverityIncident(a, "alert-scoped");
+    await notifyHighSeverityIncident({ incidentId: incident.id });
+
+    expect(await raw.notification.count({ where: { userId: mine.id } })).toBe(1);
+    expect(await raw.notification.count({ where: { userId: theirs.id } })).toBe(0);
+
+    await raw.company.updateMany({
+      where: {},
+      data: { planId: null, subscriptionStatus: null },
+    });
+  });
+
+  it("returns quietly for an incident that no longer exists", async () => {
+    // A deleted incident must not throw into the action that called it.
+    const result = await notifyHighSeverityIncident({ incidentId: "does-not-exist" });
+    expect(result.reason).toBe("gone");
+    expect(result.notified).toBe(0);
   });
 });

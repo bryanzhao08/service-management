@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { AppChrome } from "@/components/app-chrome";
 import { PushToggle } from "@/components/push-toggle";
@@ -127,6 +128,30 @@ export default async function SettingsPage() {
             </p>
           </CardContent>
         </Card>
+
+        {/*
+          Owner-only. A supervisor cannot act on a billing fact and does not
+          need to carry one into a shift.
+        */}
+        {actor.role === "OWNER" ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Plan and billing</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-text-muted">
+                What your company is on, the sites it covers this month, and what that
+                costs. Recording, reports and delivery are included on every plan and
+                never depend on a payment.
+              </p>
+              <Button asChild variant="secondary">
+                <Link href="/settings/billing" data-billing-link>
+                  View plan
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card>
           <CardHeader>

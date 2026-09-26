@@ -4,7 +4,13 @@ import type { Prisma } from "@/generated/prisma/client";
 import { Role } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db/client";
 import type { Actor } from "@/lib/db/scoped";
-import { AUDIT_LABELS, type AuditAction, type AuditRow } from "@/lib/audit-actions";
+import {
+  AUDIT_LABELS,
+  auditLabel,
+  type AuditAction,
+  type AuditRow,
+} from "@/lib/audit-actions";
+import { csvDocument } from "@/lib/export/csv";
 
 /**
  * The audit log (section 20).
@@ -82,12 +88,42 @@ export const AUDIT_PAGE_SIZE = 50;
  * The route above it is ADMIN-gated for that reason, so the scoping and the
  * permission are decided in one place rather than two.
  */
-export async function listAuditEvents(
-  actor: Actor,
-  filters: AuditFilters = {},
-  page = 0,
-): Promise<{ rows: AuditRow[]; total: number; hasMore: boolean }> {
-  const where: Prisma.AuditEventWhereInput = {
+/**
+ * A `YYYY-MM-DD` filter value to a real instant.
+ *
+ * Local midnight, not UTC. `new Date("2026-03-01")` is UTC midnight, which in
+ * California is 4pm the day before, so a "from" filter parsed that way
+ * silently includes the previous evening. Exported because the page and the
+ * export must parse a date the same way or the file will not match the screen.
+ */
+export function parseAuditDay(
+  value: string | undefined,
+  endOfDay = false,
+): Date | undefined {
+  if (!value) return undefined;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return undefined;
+  const [, y, m, d] = match;
+  return new Date(
+    Number(y),
+    Number(m) - 1,
+    Number(d),
+    endOfDay ? 23 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 999 : 0,
+  );
+}
+
+/**
+ * The filter, in one place.
+ *
+ * The paged viewer and the bulk export must answer the same question or the
+ * file will not match the screen someone exported it from, which is the exact
+ * moment an audit log stops being evidence.
+ */
+function auditWhere(actor: Actor, filters: AuditFilters): Prisma.AuditEventWhereInput {
+  return {
     companyId: actor.companyId,
     ...(filters.action ? { action: filters.action } : {}),
     ...(filters.actorId ? { actorId: filters.actorId } : {}),
@@ -101,6 +137,39 @@ export async function listAuditEvents(
         }
       : {}),
   };
+}
+
+type AuditEventRow = {
+  id: string;
+  at: Date;
+  action: string;
+  entityType: string;
+  entityId: string;
+  metadata: Prisma.JsonValue;
+  actor: { name: string; email: string } | null;
+};
+
+/** One row's database shape to the shape both the table and the CSV read. */
+function toAuditRow(event: AuditEventRow): AuditRow {
+  return {
+    id: event.id,
+    at: event.at,
+    action: event.action,
+    label: AUDIT_LABELS[event.action as AuditAction] ?? event.action,
+    entityType: event.entityType,
+    entityId: event.entityId,
+    actorName: event.actor?.name ?? null,
+    actorEmail: event.actor?.email ?? null,
+    metadata: event.metadata,
+  };
+}
+
+export async function listAuditEvents(
+  actor: Actor,
+  filters: AuditFilters = {},
+  page = 0,
+): Promise<{ rows: AuditRow[]; total: number; hasMore: boolean }> {
+  const where = auditWhere(actor, filters);
 
   const [events, total] = await Promise.all([
     prisma.auditEvent.findMany({
@@ -125,17 +194,7 @@ export async function listAuditEvents(
   ]);
 
   return {
-    rows: events.map((event) => ({
-      id: event.id,
-      at: event.at,
-      action: event.action,
-      label: AUDIT_LABELS[event.action as AuditAction] ?? event.action,
-      entityType: event.entityType,
-      entityId: event.entityId,
-      actorName: event.actor?.name ?? null,
-      actorEmail: event.actor?.email ?? null,
-      metadata: event.metadata,
-    })),
+    rows: events.map(toAuditRow),
     total,
     hasMore: (page + 1) * AUDIT_PAGE_SIZE < total,
   };
@@ -166,4 +225,78 @@ export async function auditActionsPresent(actor: Actor): Promise<string[]> {
 
 export function canViewAudit(actor: Actor): boolean {
   return actor.role === Role.ADMIN || actor.role === Role.OWNER;
+}
+
+/**
+ * Hard ceiling on a bulk audit export.
+ *
+ * Higher than the reports CSV cap because an audit log is denser per row and
+ * the whole reason to buy the export is a compliance window nobody wants to
+ * download in slices. Still a ceiling: a company three years in should not be
+ * able to ask one request to serialise everything it has ever done.
+ */
+export const AUDIT_EXPORT_ROW_CAP = 25000;
+
+/**
+ * Every matching event, for the bulk export.
+ *
+ * Separate from `listAuditEvents` rather than a `take` parameter on it,
+ * because a paged viewer and a bulk export want different failure modes: the
+ * viewer must always answer, the export must say when it truncated. Sharing
+ * `auditWhere` keeps the filters identical, so the file matches the screen.
+ */
+export async function auditEventsForExport(
+  actor: Actor,
+  filters: AuditFilters = {},
+): Promise<{ rows: AuditRow[]; truncated: boolean }> {
+  const events = await prisma.auditEvent.findMany({
+    where: auditWhere(actor, filters),
+    orderBy: [{ at: "desc" }, { id: "desc" }],
+    take: AUDIT_EXPORT_ROW_CAP + 1,
+    select: {
+      id: true,
+      at: true,
+      action: true,
+      entityType: true,
+      entityId: true,
+      metadata: true,
+      actor: { select: { name: true, email: true } },
+    },
+  });
+
+  const truncated = events.length > AUDIT_EXPORT_ROW_CAP;
+  return {
+    rows: events.slice(0, AUDIT_EXPORT_ROW_CAP).map(toAuditRow),
+    truncated,
+  };
+}
+
+/** Column order for the audit CSV. Header and body read from one list. */
+const AUDIT_COLUMNS = [
+  "When",
+  "Who",
+  "Email",
+  "Action",
+  "What it was",
+  "Thing",
+  "Id",
+  "Details",
+] as const;
+
+export function auditCsv(rows: AuditRow[]): string {
+  return csvDocument(
+    AUDIT_COLUMNS,
+    rows.map((row) => [
+      row.at.toISOString(),
+      // A null actor is the recipient-verification case: the person who
+      // clicked has no account, so naming a user here would be a lie.
+      row.actorName ?? "Recipient",
+      row.actorEmail ?? "",
+      row.action,
+      auditLabel(row.action),
+      row.entityType,
+      row.entityId,
+      row.metadata === null ? "" : JSON.stringify(row.metadata),
+    ]),
+  );
 }

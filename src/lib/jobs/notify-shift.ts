@@ -1,9 +1,15 @@
+import { companyHasEntitlement } from "@/lib/db/billing";
 import {
   handoffContext,
+  incidentAlertContext,
   notifiedSince,
   sitesWithUnverifiedRecipients,
 } from "@/lib/db/notifications";
-import { handoffWaiting, recipientUnverifiedReminder } from "@/lib/push/kinds";
+import {
+  handoffWaiting,
+  incidentHighSeverity,
+  recipientUnverifiedReminder,
+} from "@/lib/push/kinds";
 import { notify } from "@/lib/push/send";
 
 /**
@@ -87,4 +93,51 @@ export async function remindUnverifiedRecipients(
   }
 
   return { sites: sites.length, notifications, throttled };
+}
+
+/**
+ * Alerts supervisors that a high-severity incident was just logged.
+ *
+ * This is the one notification in the product that a plan can switch off, and
+ * the gate is narrow on purpose. It decides whether a phone buzzes. It does
+ * not touch the entry, the photos, the incident row, the report, or the
+ * delivery, all of which are in `ALWAYS_INCLUDED` and are written identically
+ * for a company with no subscription at all.
+ *
+ * Best-effort like its siblings: the incident is already saved by the time
+ * this runs, so a push service outage must not turn into a failed action on
+ * the guard's screen. It returns what it did so a test can tell "gated off"
+ * from "tried and nothing happened", which look identical from outside.
+ */
+export async function notifyHighSeverityIncident(params: {
+  incidentId: string;
+}): Promise<{ notified: number; reason?: "not-entitled" | "gone" }> {
+  try {
+    const context = await incidentAlertContext(params.incidentId);
+    if (!context) return { notified: 0, reason: "gone" };
+
+    if (!(await companyHasEntitlement(context.companyId, "push_alerts"))) {
+      return { notified: 0, reason: "not-entitled" };
+    }
+
+    const content = incidentHighSeverity({
+      siteName: context.siteName,
+      categoryLabel: context.categoryLabel,
+      code: context.code,
+      shiftId: context.shiftId,
+    });
+
+    let notified = 0;
+    for (const supervisorId of context.supervisorIds) {
+      try {
+        await notify(supervisorId, content);
+        notified += 1;
+      } catch {
+        // One unreachable supervisor must not cost the others their alert.
+      }
+    }
+    return { notified };
+  } catch {
+    return { notified: 0 };
+  }
 }
