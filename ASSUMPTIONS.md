@@ -665,6 +665,161 @@ formatter does not, because in the app you are looking at today. A report gets
 opened by an adjuster eighteen months later, and a date with no year is not
 evidence.
 
+## Milestone 7 — email, webhooks, delivery tracking
+
+**Webhooks are matched on `providerMessageId`, never on the email address.** An
+address is not unique across reports and changes the moment someone fixes a
+typo, so matching on it would apply a bounce for last Tuesday's report to
+tonight's.
+
+**An unknown message id and an already-terminal row both answer 200.** They are
+ordinary outcomes, not errors. A provider that gets a 4xx retries forever
+against a message we will never recognise.
+
+**Reordered-replay protection deliberately excludes QUEUED and SENT.** Those two
+we set ourselves, off our own clock: the provider stamps its event when it
+accepts the message, we stamp SENT when the HTTP response gets back to us. A
+few hundred milliseconds of clock skew the wrong way would make every
+`delivered` look like a stale replay and drop it, silently losing the one
+signal this product is sold on.
+
+**The console provider confirms after a deliberate 20-second delay**
+(`CONFIRM_AFTER_MS`, `src/lib/jobs/confirm-console.ts`). A status that flips to
+DELIVERED in the same breath as the send demonstrates nothing, so the local
+simulator makes the pending state visible first. The cost is that two sweeps
+run back to back legitimately report 0 confirmed, which reads like a broken
+sweep and is not one.
+
+**The console outbox is JSON on disk with no `callbackUrl` key.** It records
+`messageId, sentAt, to, subject, html, text, attachments`. Anything that wants
+to drive a simulated webhook derives the id from `messageId` rather than
+expecting the provider to hand back a callback, because the real provider does
+not either.
+
+**The local storage driver signs its own URLs** (`src/lib/storage/tokens.ts`).
+S3 gets presigned URLs from AWS, so leaving the local driver unsigned would
+make the path everyone develops against the one nobody tests. The signature
+covers the key, the content type, the byte ceiling and the expiry, so the size
+limit is a fact the server knows rather than one the client claims.
+
+## Milestone 8 — end of shift, clock out, dashboard
+
+**The end-of-shift flow polls only while it is waiting.** `router.refresh()`
+runs on an interval during report build and send, and stops when neither is
+outstanding. A permanent poll would keep the page busy all night for the one
+minute of it that needs live state.
+
+**Clock-out is a step in the flow, and a verbal-handover site has two steps
+rather than four with two greyed out.** Showing "Generate" and "Send" as
+skipped would tell the guard we chose not to do something we could have done,
+when the truth is the customer asked us not to hold it at all.
+
+## Milestone 9 — recipients, verification, site configuration
+
+**Three logging modes, not a toggle.** `FULL`, `LIGHT` and `VERBAL` are a site
+property, because the same guard company runs a hospital that wants every
+door checked and a car park that wants an hourly line. One global setting would
+force the strictest site's overhead onto the loosest one.
+
+**A verified recipient goes stale on a timer** (`src/lib/db/recipients.ts`).
+Verification is not a one-time flag, because the address that worked last
+February belongs to a facilities manager who has since left. Unverified and
+bounced addresses are surfaced and chased by a reminder job
+(`remindUnverifiedRecipients`), and the list sorts bounced first, then
+unverified, so the office sees the addresses that need a human before the ones
+that are fine.
+
+## Milestone 10 — push, PWA, offline outbox
+
+**The outbox is the source of truth while offline, not the UI.** Entries are
+written to IndexedDB first and replayed on reconnect
+(`src/lib/offline/outbox.ts`). A guard in a stairwell with no signal is the
+normal case for this product, not an edge case, so the write path assumes the
+network is absent and treats its presence as the optimisation.
+
+**Replay is idempotent by client-generated id.** A background sync that fires
+twice must not produce two identical entries in the timeline, because the
+timeline is evidence and a duplicated incident is a credibility problem.
+
+**Push is the only capability gated by plan on the guard side**
+(`push_alerts`). It is an alert about the record, not the record itself, which
+is the line drawn in the pricing section: billing restricts pulling history
+out and notifying about it, never capturing it.
+
+## Milestone 11 — reports history, settings, export, audit log
+
+**The audit log is append-only and its writer swallows errors.** There is no
+update and no delete in `src/lib/db/audit.ts`, and nothing else in the app
+writes `auditEvent`. The tradeoff is stated rather than hidden: a dropped row
+is a gap nobody is told about, which is worse than a clean log and better than
+a guard who cannot clock in because the log was unavailable. A negative control
+in `tests/db/audit.test.ts` deliberately provokes a foreign-key failure to
+prove the swallow works, which is why `pnpm verify` prints a `prisma:error`
+on a passing run.
+
+**Three separate export routes, not one.** Only `audit/export` is plan-gated.
+`reports/export` and `me/export` are not, and `me/export` in particular must
+never be: someone's right to their own data is not a feature of a paid tier.
+Collapsing these into one handler is how that check gets inherited by accident.
+
+## Milestone 12 — seed, end-to-end tests, accessibility
+
+**The golden path asks the database, not the screen.** The final assertion
+reads `Report` and `ReportDelivery` rows rather than trusting a success
+message, because the screen saying "sent" is the thing under test.
+
+**Tests assert properties, not fixture identities.** Four separate failures in
+this build had one shape: the test encoded one selection rule while the app
+used another, and passed only while the fixture happened to agree. The golden
+path used `ORDER BY scheduledStart DESC LIMIT 1` where the dashboard offers the
+active shift first. The repair, applied consistently, is to reset the whole set
+and then assert the property that matters (this shift belongs to this guard)
+by asking the database what the app actually opened.
+
+**A gate that fabricates state clears it up after itself.** `check-billing`
+was free-riding on shifts left behind by `check-shift`, so it passed alone and
+failed immediately after `check-auth`. `check-auth` ended on a wrong PIN and
+left one failed attempt behind every run, and because the attempt counter is a
+per-process Map that only a successful entry clears, its fifth run inside
+fifteen minutes read "Too many attempts" instead of "Incorrect PIN". Both now
+own their preconditions and their cleanup. All 14 gates pass twice in sequence.
+
+**Playwright spawns `node_modules/.bin/next start` directly.** Going through
+`pnpm start` put the server in its own process group, so the teardown signal
+hit the pnpm wrapper and never reached the server. Every test passed, the run
+then hung forever holding the port, and the survivor was inherited by the next
+run because `reuseExistingServer` is true. Two apparent test failures were
+actually one wedged server left by a killed run, spinning at 99% CPU in an
+uncaught-exception loop. Before trusting any e2e failure, check `ps` on the
+port.
+
+## Milestone 13 — final pass
+
+**Most of the pricing table is not enforced.** There are 14 entitlements and
+exactly two are checked anywhere in the app: `audit_export` and `push_alerts`.
+The other twelve (`client_portal`, `custom_templates`, `white_label`,
+`vendor_roster`, `report_schedule`, `compliance_dashboard`,
+`missing_report_alerts`, `cross_vendor_search`, `procurement_export`, `sso`,
+`api_access`, `delivery_attestation`) are named, labelled and priced, and
+nothing behind them is built. The comparison table is a plan, not a feature
+list, and shipping it to a buyer as-is would be overselling.
+
+**There is no payment processor and no checkout.** No Stripe, no Paddle, no
+billing dependency of any kind. Subscriptions exist as rows created by the
+seed. A company's plan is set in the database by hand. "Start trial" is not
+wired to anything that could take money.
+
+**The `pg` deprecation warning is library-internal.** `Calling client.query()
+when the client is already executing a query` appears during e2e runs. Under
+`--trace-deprecation` the entire stack sits inside `@prisma/adapter-pg`
+`performIO`/`queryRaw` and `@prisma/client/runtime` with no application frame.
+Prisma 7.10 with pg 8.23. Recorded so the next person does not go looking for
+it in `src/`.
+
+**Three screenshots are deliberately gitignored.** `ui-gallery-*.png` and
+`wordmark.png` are verification artifacts a gate regenerates, not documentation,
+and committing them would mean reviewing image diffs that carry no information.
+
 ## Pricing and packaging
 
 **Two products, two buyers.** Transient is sold both to contract guard
