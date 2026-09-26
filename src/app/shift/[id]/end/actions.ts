@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { requireUnlockedActor } from "@/lib/auth/guards";
 import { enqueue } from "@/lib/db/jobs";
 import { db } from "@/lib/db/scoped";
+import { producesReport } from "@/lib/sites/logging-mode";
+import type { LoggingMode } from "@/generated/prisma/enums";
 import {
   addOneOffDelivery,
   endEndFlow,
@@ -33,12 +35,26 @@ export type EndState = { error: string | null; ok?: boolean };
  */
 async function ownShift(shiftId: string) {
   const actor = await requireUnlockedActor();
-  const shift = await db(actor).shift.findById(shiftId);
+  const shift = await db(actor).shift.findByIdWithSite(shiftId);
   if (!shift) return { error: "That shift is not available." };
   if (shift.guardId !== actor.userId) {
     return { error: "Only the guard on this shift can end it." };
   }
   return { actor, shift, error: null };
+}
+
+/**
+ * The site declined a report, so there is nothing here to build or send.
+ *
+ * This is checked server-side and not only by hiding the buttons, because a
+ * `"use server"` export is a live POST endpoint whether or not anything on
+ * screen points at it. The middle school in the research asked for verbal
+ * handover; the failure this prevents is us emailing a document about a school
+ * to a list that school never agreed to.
+ */
+function refusesReports(shift: { site: { loggingMode: LoggingMode } }): string | null {
+  if (producesReport(shift.site.loggingMode)) return null;
+  return "This site is set to verbal handover, so shifts here do not produce a report.";
 }
 
 /** Step 1 save. The shift summary and the handoff note for the next guard. */
@@ -69,6 +85,9 @@ export async function buildReport(shiftId: string): Promise<EndState> {
   const owned = await ownShift(shiftId);
   if (owned.error) return { error: owned.error };
 
+  const refused = refusesReports(owned.shift!);
+  if (refused) return { error: refused };
+
   const state = await findEndFlowShift(shiftId);
   if (state?.buildInFlight) return { error: null, ok: true };
 
@@ -86,6 +105,9 @@ export async function buildReport(shiftId: string): Promise<EndState> {
 export async function sendReport(shiftId: string, reportId: string): Promise<EndState> {
   const owned = await ownShift(shiftId);
   if (owned.error) return { error: owned.error };
+
+  const refused = refusesReports(owned.shift!);
+  if (refused) return { error: refused };
 
   const report = await db(owned.actor!).report.findById(reportId);
   if (!report || report.shiftId !== shiftId) {
@@ -115,6 +137,9 @@ export async function addOneOffRecipient(
 ): Promise<EndState> {
   const owned = await ownShift(shiftId);
   if (owned.error) return { error: owned.error };
+
+  const refused = refusesReports(owned.shift!);
+  if (refused) return { error: refused };
 
   const address = email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {

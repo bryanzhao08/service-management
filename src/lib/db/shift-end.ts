@@ -1,4 +1,9 @@
-import type { EntryType, IncidentStatus, Severity } from "@/generated/prisma/enums";
+import type {
+  EntryType,
+  IncidentStatus,
+  LoggingMode,
+  Severity,
+} from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db/client";
 
 /**
@@ -12,6 +17,12 @@ import { prisma } from "@/lib/db/client";
 export type ShiftSummaryData = {
   siteName: string;
   siteTimezone: string;
+  /**
+   * What this site agreed to. Carried on the summary rather than fetched
+   * separately by the screen, because the one question the end-of-shift flow
+   * must never get wrong is whether this site wanted a document at all.
+   */
+  loggingMode: LoggingMode;
   guardName: string;
   counts: Record<EntryType, number>;
   incidents: {
@@ -43,7 +54,7 @@ export async function endOfShiftData(
   const shift = await prisma.shift.findUnique({
     where: { id: shiftId },
     include: {
-      site: { select: { name: true, timezone: true } },
+      site: { select: { name: true, timezone: true, loggingMode: true } },
       guard: { select: { name: true, email: true } },
       handoffFrom: {
         select: { guard: { select: { name: true } }, clockOutAt: true },
@@ -116,6 +127,7 @@ export async function endOfShiftData(
   return {
     siteName: shift.site.name,
     siteTimezone: shift.site.timezone,
+    loggingMode: shift.site.loggingMode,
     guardName: shift.guard.name ?? shift.guard.email ?? "Guard",
     counts,
     incidents,
@@ -341,4 +353,23 @@ export async function addOneOffDelivery(
     // the outcome the guard wanted.
     return false;
   }
+}
+
+/**
+ * The little a build job needs to know before it commits to rendering.
+ *
+ * Separate from `endOfShiftData` because that loads the whole night — entries,
+ * counts, checks, media — and the only questions here are "does this shift
+ * still exist" and "did this site agree to a report at all". Loading the night
+ * to answer the second one would mean the refusal costs more than the render.
+ */
+export async function shiftReportContext(
+  shiftId: string,
+): Promise<{ siteId: string; loggingMode: LoggingMode } | null> {
+  const shift = await prisma.shift.findUnique({
+    where: { id: shiftId },
+    select: { siteId: true, site: { select: { loggingMode: true } } },
+  });
+  if (!shift) return null;
+  return { siteId: shift.siteId, loggingMode: shift.site.loggingMode };
 }

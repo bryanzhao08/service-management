@@ -3,7 +3,7 @@
  * unauthenticated gate -> magic link -> session -> PIN -> scoped dashboard.
  *
  * Run against a started server:
- *   BASE=http://127.0.0.1:3210 node scripts/check-auth.mjs
+ *   AUTH_URL=http://localhost:3210 BASE=http://localhost:3210 node scripts/check-auth.mjs
  *
  * Every check here exists because the alternative is asserting that a file
  * compiles. A `NextAuthConfig` that typechecks can still fail to mint a
@@ -17,7 +17,7 @@ import { readdir, readFile, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-const BASE = process.env.BASE ?? "http://127.0.0.1:3210";
+const BASE = process.env.BASE ?? "http://localhost:3210";
 const OUTBOX = path.resolve(".data/outbox");
 const GUARD_EMAIL = "guard.night@meridian.test";
 const UNKNOWN_EMAIL = "nobody@nowhere.test";

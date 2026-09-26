@@ -7,7 +7,6 @@ import { renderReport } from "@/lib/reports/render";
 import { LOCAL_ROOT, storage } from "@/lib/storage/driver";
 import { mediaKey, mediaPrefix } from "@/lib/storage/keys";
 
-import { createReportDraft } from "@/lib/db/reports";
 import { enqueue } from "@/lib/db/jobs";
 import { runJobs } from "@/lib/jobs/runner";
 
@@ -266,17 +265,23 @@ describe("LOCAL_ROOT", () => {
 describe("buildReport job", () => {
   it("runs through the queue and leaves a real PDF in storage", async () => {
     const seeded = await seedShift("pdfjob");
-    const report = await createReportDraft({
-      shiftId: seeded.shift.id,
-      generatedById: seeded.owner.id,
-    });
 
-    await enqueue("GENERATE_REPORT", { reportId: report.id });
+    // The payload the end-of-shift flow actually enqueues. This test used to
+    // pass `{ reportId }` and construct the draft itself, which is a contract
+    // nothing in the app ever produced — so the handler was green while the
+    // real button was broken.
+    await enqueue("GENERATE_REPORT", {
+      shiftId: seeded.shift.id,
+      requestedById: seeded.owner.id,
+    });
     const summary = await runJobs({ limit: 5 });
     expect(summary.succeeded).toBe(1);
     expect(summary.failed).toBe(0);
 
-    const after = await raw.report.findUniqueOrThrow({ where: { id: report.id } });
+    const after = await raw.report.findFirstOrThrow({
+      where: { shiftId: seeded.shift.id },
+    });
+    expect(after.version).toBe(1);
     expect(after.status).toBe("READY");
     expect(after.storageKey).toBeTruthy();
     expect(after.pages).toBeGreaterThanOrEqual(1);
@@ -296,16 +301,19 @@ describe("buildReport job", () => {
 
   it("is idempotent, so a redelivered job does not rebuild", async () => {
     const seeded = await seedShift("pdfidem");
-    const report = await createReportDraft({
+    const payload = {
       shiftId: seeded.shift.id,
-      generatedById: seeded.owner.id,
-    });
+      requestedById: seeded.owner.id,
+    };
 
-    await enqueue("GENERATE_REPORT", { reportId: report.id });
+    await enqueue("GENERATE_REPORT", payload);
     await runJobs({ limit: 5 });
-    const first = await raw.report.findUniqueOrThrow({ where: { id: report.id } });
+    const report = await raw.report.findFirstOrThrow({
+      where: { shiftId: seeded.shift.id },
+    });
+    const first = report;
 
-    await enqueue("GENERATE_REPORT", { reportId: report.id });
+    await enqueue("GENERATE_REPORT", payload);
     await runJobs({ limit: 5 });
     const second = await raw.report.findUniqueOrThrow({ where: { id: report.id } });
 
@@ -320,20 +328,15 @@ describe("buildReport job", () => {
     expect(report).toBeNull();
 
     const seeded = await seedShift("pdffail");
-    const draft = await createReportDraft({
-      shiftId: seeded.shift.id,
-      generatedById: seeded.owner.id,
-    });
-    // Delete the shift's site timezone source by removing the shift itself.
-    // The handler must mark the row, not just throw into the runner.
-    await raw.shift.delete({ where: { id: seeded.shift.id } });
+    const shiftId = seeded.shift.id;
+    // The handler must treat a vanished shift as done rather than retrying
+    // against nothing.
+    await raw.shift.delete({ where: { id: shiftId } });
 
-    await enqueue("GENERATE_REPORT", { reportId: draft.id });
+    await enqueue("GENERATE_REPORT", { shiftId, requestedById: seeded.owner.id });
     const summary = await runJobs({ limit: 5 });
 
-    // Cascade takes the report with the shift, so this proves the handler
-    // treats a vanished row as done rather than retrying against nothing.
     expect(summary.failed).toBe(0);
-    expect(await raw.report.findUnique({ where: { id: draft.id } })).toBeNull();
+    expect(await raw.report.findFirst({ where: { shiftId } })).toBeNull();
   }, 60_000);
 });

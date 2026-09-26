@@ -21,8 +21,9 @@ import { IncidentSheet } from "@/components/shift/incident-sheet";
 import { MoreSheet } from "@/components/shift/more-sheet";
 import { PackageSheet } from "@/components/shift/package-sheet";
 import { Badge } from "@/components/ui/badge";
+import { capabilitiesFor } from "@/lib/sites/logging-mode";
 import { ElapsedTimer } from "@/components/ui/timer";
-import type { EntryType } from "@/generated/prisma/enums";
+import type { EntryType, LoggingMode } from "@/generated/prisma/enums";
 import { formatClock, hourBucket } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +60,12 @@ export interface SiteConfig {
   name: string;
   code: string;
   timezone: string;
+  /**
+   * What this site agreed to log. The bar asks the capability table rather
+   * than testing the enum, so adding a mode never means auditing every screen
+   * that happens to render a button.
+   */
+  loggingMode: LoggingMode;
   areas: readonly { id: string; name: string }[];
   entryTypes: readonly {
     id: string;
@@ -159,6 +166,43 @@ export function ShiftTimeline({
   const ongoing = entries.filter(
     (entry) => entry.incident && entry.incident.status === "ONGOING",
   );
+
+  // What the bar is allowed to offer.
+  //
+  // Built from the capability table rather than hardcoded to four buttons,
+  // because a site on verbal handover that is shown a Photo button has already
+  // been failed: the guard taps it, the photo uploads, and we are now holding
+  // an image of a property whose owner asked us not to. Hiding the control is
+  // half of the fix; the server refusing the write is the other half, and both
+  // read the same table.
+  const capabilities = capabilitiesFor(site.loggingMode);
+  const atEntryCap =
+    capabilities.maxEntries !== null &&
+    entries.filter((entry) => entry.type === "NOTE").length >= capabilities.maxEntries;
+  const barActions = React.useMemo(() => {
+    const actions: {
+      id: Exclude<SheetId, null>;
+      icon: typeof FileText;
+      label: string;
+      tone?: "danger";
+    }[] = [];
+    if (!atEntryCap) actions.push({ id: "note", icon: FileText, label: "Note" });
+    if (capabilities.photos)
+      actions.push({ id: "photo", icon: Camera, label: "Photo" });
+    if (capabilities.incidents)
+      actions.push({
+        id: "incident",
+        icon: AlertTriangle,
+        label: "Incident",
+        tone: "danger",
+      });
+    // "More" holds packages, patrols and handoffs. With none of them permitted
+    // it would open an empty sheet, which reads as a bug rather than as a
+    // setting somebody chose.
+    if (capabilities.packages || capabilities.maxEntries === null)
+      actions.push({ id: "more", icon: MoreHorizontal, label: "More" });
+    return actions;
+  }, [atEntryCap, capabilities]);
 
   // Grouped by the hour the entry happened in the *site's* zone, so a shift in
   // Los Angeles read from New York still groups by the hours the guard worked.
@@ -262,28 +306,21 @@ export function ShiftTimeline({
             aria-label="Log an entry"
             className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)]"
           >
-            <div className="mx-auto grid w-full max-w-lg grid-cols-4 gap-2 p-3">
-              <ActionButton
-                icon={FileText}
-                label="Note"
-                onClick={() => openSheet("note")}
-              />
-              <ActionButton
-                icon={Camera}
-                label="Photo"
-                onClick={() => openSheet("photo")}
-              />
-              <ActionButton
-                icon={AlertTriangle}
-                label="Incident"
-                tone="danger"
-                onClick={() => openSheet("incident")}
-              />
-              <ActionButton
-                icon={MoreHorizontal}
-                label="More"
-                onClick={() => openSheet("more")}
-              />
+            <div
+              className="mx-auto grid w-full max-w-lg gap-2 p-3"
+              style={{
+                gridTemplateColumns: `repeat(${barActions.length}, minmax(0, 1fr))`,
+              }}
+            >
+              {barActions.map((action) => (
+                <ActionButton
+                  key={action.id}
+                  icon={action.icon}
+                  label={action.label}
+                  tone={action.tone}
+                  onClick={() => openSheet(action.id)}
+                />
+              ))}
             </div>
           </nav>
 

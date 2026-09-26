@@ -83,6 +83,31 @@ export async function createReportDraft(input: {
   });
 }
 
+/**
+ * The draft a build job should work on.
+ *
+ * A job that failed halfway and is being retried must continue the version it
+ * started, not open a new one — five attempts would otherwise leave v1 to v5
+ * on one night's shift and the supervisor would have to guess which is the
+ * report. A version that already finished is different: re-running after
+ * clock-out is the documented correction path and is supposed to produce a new
+ * version, which is what the `DRAFT`/`GENERATING`/`FAILED` filter gives us.
+ */
+export async function draftForBuild(input: { shiftId: string; generatedById: string }) {
+  const pending = await prisma.report.findFirst({
+    where: {
+      shiftId: input.shiftId,
+      status: {
+        in: [ReportStatus.DRAFT, ReportStatus.GENERATING, ReportStatus.FAILED],
+      },
+    },
+    orderBy: { version: "desc" },
+    select: { id: true },
+  });
+  if (pending) return pending;
+  return createReportDraft(input);
+}
+
 export async function markReportGenerating(reportId: string) {
   return prisma.report.update({
     where: { id: reportId },

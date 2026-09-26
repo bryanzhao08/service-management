@@ -3,11 +3,14 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 
 import {
+  draftForBuild,
   markReportFailed,
   markReportGenerating,
   markReportReady,
   reportForBuild,
 } from "@/lib/db/reports";
+import { shiftReportContext } from "@/lib/db/shift-end";
+import { producesReport } from "@/lib/sites/logging-mode";
 import { renderReport } from "@/lib/reports/render";
 import { storage } from "@/lib/storage/driver";
 import { reportKey } from "@/lib/storage/keys";
@@ -23,11 +26,23 @@ import { reportKey } from "@/lib/storage/keys";
  * the clock-out to a PDF bug.
  */
 
-export const buildReportPayload = z.object({ reportId: z.string().min(1) });
+/**
+ * The payload the end-of-shift flow actually enqueues.
+ *
+ * It carries the shift rather than a report id because the *shift* is the
+ * thing the guard pressed a button about, and because `findEndFlowShift`
+ * de-duplicates in-flight builds by reading `payload.shiftId`. The report row
+ * is opened here, inside the handler, so a crash between "create the draft"
+ * and "enqueue the job" cannot strand a DRAFT nobody will ever build.
+ */
+export const buildReportPayload = z.object({
+  shiftId: z.string().min(1),
+  requestedById: z.string().min(1),
+});
 
 export type BuildReportResult = {
-  reportId: string;
-  result: "built" | "gone" | "already-ready";
+  reportId: string | null;
+  result: "built" | "gone" | "already-ready" | "not-permitted";
   bytes?: number;
   pages?: number;
 };
@@ -42,11 +57,24 @@ export type BuildReportResult = {
 export const GALLERY_TTL_DAYS = 30;
 
 export async function buildReport(rawPayload: unknown): Promise<BuildReportResult> {
-  const { reportId } = buildReportPayload.parse(rawPayload);
+  const { shiftId, requestedById } = buildReportPayload.parse(rawPayload);
+
+  const context = await shiftReportContext(shiftId);
+  // A row that is gone is not a failure to retry against.
+  if (!context) return { reportId: null, result: "gone" };
+  // Last line of defence for the site that asked for verbal handover only. The
+  // screen does not offer this and the action refuses it, but a job row is a
+  // third way in — a sweep, a manual requeue, an older client — and the cost of
+  // being wrong here is a document about a school landing in inboxes that
+  // school never agreed to.
+  if (!producesReport(context.loggingMode)) {
+    return { reportId: null, result: "not-permitted" };
+  }
+
+  const draft = await draftForBuild({ shiftId, generatedById: requestedById });
+  const reportId = draft.id;
 
   const report = await reportForBuild(reportId);
-  // Same reasoning as the media worker: a row that is gone is not a failure to
-  // retry against. A deleted shift takes its reports with it.
   if (!report) return { reportId, result: "gone" };
   if (report.status === "READY" && report.storageKey) {
     return { reportId, result: "already-ready" };

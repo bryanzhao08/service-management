@@ -53,6 +53,7 @@ export default async function ShiftPage({
         name: site.name,
         code: site.code,
         timezone: site.timezone,
+        loggingMode: site.loggingMode,
         areas: site.areas.map((a) => ({ id: a.id, name: a.name })),
         // One configured list serves both the incident category chips and
         // the "More > custom entry type" menu. The schema has no discriminator

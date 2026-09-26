@@ -16,21 +16,21 @@
  *
  * Every positive assertion that could pass vacuously is paired with a control
  * that must fail. Run against a started production server:
- *   BASE=http://127.0.0.1:3210 node scripts/check-shift.mjs
+ *   AUTH_URL=http://localhost:3210 BASE=http://localhost:3210 node scripts/check-shift.mjs
  */
 import "dotenv/config";
 import { existsSync } from "node:fs";
-import { readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 
 import AxeBuilder from "@axe-core/playwright";
 import { chromium } from "playwright";
 import pg from "pg";
 
-const BASE = process.env.BASE ?? "http://127.0.0.1:3210";
-const OUTBOX = path.resolve(".data/outbox");
+import { requireMatchingAuthOrigin, signIn } from "./support/session.mjs";
+
+const BASE = process.env.BASE ?? "http://localhost:3210";
+requireMatchingAuthOrigin(BASE);
 const GUARD_EMAIL = "guard.night@meridian.test";
-const PIN = "4821";
 
 let failed = 0;
 function check(name, ok, detail = "") {
@@ -40,51 +40,7 @@ function check(name, ok, detail = "") {
 
 const sql = new pg.Client({ connectionString: process.env.DATABASE_URL });
 
-async function outboxFiles() {
-  if (!existsSync(OUTBOX)) return [];
-  return (await readdir(OUTBOX)).filter((f) => f.endsWith(".json"));
-}
-
-async function latestMagicLink() {
-  const files = await outboxFiles();
-  const last = files.at(-1);
-  if (!last) return null;
-  const raw = JSON.parse(await readFile(path.join(OUTBOX, last), "utf8"));
-  const match = /https?:\/\/[^\s"'<>]*callback[^\s"'<>]*/.exec(
-    `${raw.html ?? ""} ${raw.text ?? ""}`,
-  );
-  return match ? match[0].replace(/&amp;/g, "&") : null;
-}
-
 /** Signs a context in as `email` and unlocks it, leaving it on /dashboard. */
-async function signIn(browser, email) {
-  await rm(OUTBOX, { recursive: true, force: true });
-  await sql.query('UPDATE "User" SET "pinHash" = NULL WHERE email = $1', [email]);
-
-  const ctx = await browser.newContext();
-  const page = await ctx.newPage();
-  await page.goto(`${BASE}/sign-in`, { waitUntil: "domcontentloaded" });
-  await page.fill('input[name="email"]', email);
-  await Promise.all([
-    page.waitForLoadState("networkidle"),
-    page.click('button[type="submit"]'),
-  ]);
-
-  const link = await latestMagicLink();
-  if (!link) throw new Error(`no magic link for ${email}`);
-  await page.goto(link, { waitUntil: "domcontentloaded" });
-
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
-  if (page.url().includes("/pin")) {
-    await page.fill('input[name="pin"]', PIN);
-    await page.fill('input[name="confirm"]', PIN);
-    await Promise.all([
-      page.waitForURL(/\/dashboard/, { timeout: 20_000 }),
-      page.click('button[type="submit"]'),
-    ]);
-  }
-  return { ctx, page };
-}
 
 /**
  * Guarantees a second company with one owner in it.
@@ -194,7 +150,7 @@ try {
     `\n(removed ${fixture.removed} prior shift(s); scheduled one at ${fixture.site})\n`,
   );
 
-  const { ctx, page } = await signIn(browser, GUARD_EMAIL);
+  const { ctx, page } = await signIn(browser, GUARD_EMAIL, { base: BASE, sql });
   page.on("pageerror", (error) => {
     check("no uncaught page error", false, error.message);
   });
@@ -651,7 +607,7 @@ try {
     );
     const rows = [rival];
     {
-      const other = await signIn(browser, rows[0].email);
+      const other = await signIn(browser, rows[0].email, { base: BASE, sql });
       const cookies = (await other.ctx.cookies())
         .map((c) => `${c.name}=${c.value}`)
         .join("; ");

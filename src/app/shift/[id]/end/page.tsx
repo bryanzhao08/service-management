@@ -11,6 +11,7 @@ import {
   summaryTemplate,
 } from "@/lib/db/shift-end";
 import { formatClock } from "@/lib/time";
+import { capabilitiesFor } from "@/lib/sites/logging-mode";
 
 export const metadata: Metadata = { title: "End of shift" };
 
@@ -48,21 +49,30 @@ export default async function EndOfShiftPage({
   // built for -- that silently under-reports, and it under-reports in the
   // direction that flatters us. `startEndFlow` is first-write-wins, so doing it
   // on every render is safe and re-entry still cannot reset it.
+  // A site with no recipient list is not asked for one. `recipientsForSend`
+  // would happily return an empty pair, but the query still runs and the shape
+  // still reads as "we looked and found nobody" rather than "there is nobody
+  // to look for".
+  const sends = shift.site.loggingMode !== "VERBAL";
   const [data, recipients, reports] = await Promise.all([
     endOfShiftData(id),
-    recipientsForSend(id, shift.siteId),
-    scoped.report.listForShift(id),
+    sends
+      ? recipientsForSend(id, shift.siteId)
+      : Promise.resolve({ configured: [], oneOffs: [] as string[] }),
+    sends ? scoped.report.listForShift(id) : Promise.resolve([]),
     shift.clockOutAt === null ? startEndFlow(id) : Promise.resolve(),
   ]);
   if (!data) notFound();
 
   const prefilled = data.summary ?? summaryTemplate(data, formatClock);
+  const capabilities = capabilitiesFor(data.loggingMode);
 
   return (
     <EndOfShiftFlow
       shiftId={id}
       siteName={data.siteName}
       timeZone={data.siteTimezone}
+      reportMode={capabilities.report}
       alreadyClockedOut={data.clockOutAt !== null}
       startedAt={data.endFlowStartedAt?.toISOString() ?? null}
       clockInAt={data.clockInAt?.toISOString() ?? null}

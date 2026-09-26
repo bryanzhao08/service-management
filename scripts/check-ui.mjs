@@ -12,7 +12,7 @@
  *    instead of over the "i", because its position was a hardcoded coordinate.
  *
  * Run against an already-serving build:
- *   BASE=http://127.0.0.1:3210 node scripts/check-ui.mjs
+ *   BASE=http://localhost:3210 node scripts/check-ui.mjs
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -21,7 +21,7 @@ import sharp from "sharp";
 
 import { chromium } from "playwright";
 
-const BASE = process.env.BASE ?? "http://127.0.0.1:3000";
+const BASE = process.env.BASE ?? "http://localhost:3210";
 const OUT = process.env.OUT ?? path.join(process.cwd(), "docs/screenshots");
 /** Principle 1: minimum tap target 48x48 px. */
 const TAP = 48;

@@ -84,12 +84,21 @@ export function EndOfShiftFlow(props: {
   recipients: RecipientRow[];
   oneOffs: string[];
   reports: ReportRow[];
+  /**
+   * What this site's logging mode permits at the end of a shift. When it is
+   * `none` the middle two steps do not exist: there is no document to build
+   * and no list to send it to, so offering them would be offering to do
+   * something the site declined.
+   */
+  reportMode: "pdf" | "email" | "none";
 }) {
   const router = useRouter();
   const latest = props.reports[0] ?? null;
+  const sends = props.reportMode !== "none";
 
   const [step, setStep] = React.useState<Step>(() => {
     if (props.alreadyClockedOut) return 4;
+    if (!sends) return 1;
     if (latest?.sentAt) return 4;
     if (latest?.ready) return 3;
     return 1;
@@ -146,7 +155,7 @@ export function EndOfShiftFlow(props: {
         </div>
       </header>
 
-      <StepRail current={step} />
+      <StepRail current={step} sends={sends} />
 
       {error ? (
         <p
@@ -166,12 +175,15 @@ export function EndOfShiftFlow(props: {
           onHandoffNote={setHandoffNote}
           busy={busy}
           onNext={() =>
-            run(() => saveSummary(props.shiftId, { summary, handoffNote }), 2)
+            run(
+              () => saveSummary(props.shiftId, { summary, handoffNote }),
+              sends ? 2 : 4,
+            )
           }
         />
       ) : null}
 
-      {step === 2 ? (
+      {step === 2 && sends ? (
         <GenerateStep
           report={latest}
           busy={busy}
@@ -180,7 +192,7 @@ export function EndOfShiftFlow(props: {
         />
       ) : null}
 
-      {step === 3 && latest ? (
+      {step === 3 && sends && latest ? (
         <SendStep
           shiftId={props.shiftId}
           report={latest}
@@ -206,26 +218,38 @@ export function EndOfShiftFlow(props: {
         />
       ) : null}
 
-      {step >= 3 ? (
+      {step >= 3 && sends ? (
         <p className="text-center text-sm text-text-muted">
           It&rsquo;s safe to clock out. We&rsquo;ll push a notification when it&rsquo;s
           delivered &mdash; or if anything bounces.
         </p>
-      ) : (
+      ) : sends ? (
         <p className="text-center text-sm text-text-muted">
           You can leave once step 3 is done; we&rsquo;ll notify you.
+        </p>
+      ) : (
+        <p className="text-center text-sm text-text-muted">
+          This site is on verbal handover. Nothing is emailed &mdash; we record that the
+          shift happened and that is all.
         </p>
       )}
     </main>
   );
 }
 
-function StepRail({ current }: { current: Step }) {
-  const labels = ["Review", "Generate", "Send", "Clock out"];
+function StepRail({ current, sends }: { current: Step; sends: boolean }) {
+  // A site on verbal handover has two steps, not four greyed out. Showing
+  // "Generate" and "Send" as skipped would tell the guard we chose not to do
+  // something we could have done, when the truth is the customer asked us not
+  // to hold it at all.
+  const labels = sends
+    ? ["Review", "Generate", "Send", "Clock out"]
+    : ["Review", "Clock out"];
+  const steps: Step[] = sends ? [1, 2, 3, 4] : [1, 4];
   return (
     <ol className="flex gap-1" aria-label="End of shift progress">
       {labels.map((label, index) => {
-        const n = (index + 1) as Step;
+        const n = steps[index]!;
         const state = n < current ? "done" : n === current ? "active" : "todo";
         return (
           <li key={label} className="flex-1">

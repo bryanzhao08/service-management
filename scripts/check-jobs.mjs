@@ -14,22 +14,20 @@
  *     a public URL and a worker that does real work on demand.
  *
  * Run against a started production server:
- *   BASE=http://localhost:3210 node scripts/check-jobs.mjs
+ *   AUTH_URL=http://localhost:3210 BASE=http://localhost:3210 node scripts/check-jobs.mjs
  */
 import "dotenv/config";
-import { existsSync } from "node:fs";
-import { readdir, readFile, rm } from "node:fs/promises";
-import path from "node:path";
 
 import { chromium } from "playwright";
 import pg from "pg";
 
+import { requireMatchingAuthOrigin, signIn } from "./support/session.mjs";
+
 const BASE = process.env.BASE ?? "http://localhost:3210";
-const OUTBOX = path.resolve(".data/outbox");
+requireMatchingAuthOrigin(BASE);
 const GUARD_EMAIL = "guard.night@meridian.test";
 const PEER_EMAIL = "guard.swing@meridian.test";
 const PEER_SHIFT = "isoshiftjobsgate";
-const PIN = "4821";
 
 let failed = 0;
 function check(name, ok, detail = "") {
@@ -38,49 +36,6 @@ function check(name, ok, detail = "") {
 }
 
 const sql = new pg.Client({ connectionString: process.env.DATABASE_URL });
-
-async function latestMagicLink() {
-  if (!existsSync(OUTBOX)) return null;
-  const files = (await readdir(OUTBOX)).filter((f) => f.endsWith(".json"));
-  const last = files.at(-1);
-  if (!last) return null;
-  const raw = JSON.parse(await readFile(path.join(OUTBOX, last), "utf8"));
-  const match = /https?:\/\/[^\s"'<>]*callback[^\s"'<>]*/.exec(
-    `${raw.html ?? ""} ${raw.text ?? ""}`,
-  );
-  return match ? match[0].replace(/&amp;/g, "&") : null;
-}
-
-async function signIn(browser, email) {
-  await rm(OUTBOX, { recursive: true, force: true });
-  await sql.query('UPDATE "User" SET "pinHash" = NULL WHERE email = $1', [email]);
-
-  const ctx = await browser.newContext();
-  const page = await ctx.newPage();
-  await page.goto(`${BASE}/sign-in`, { waitUntil: "domcontentloaded" });
-  await page.fill('input[name="email"]', email);
-  await page.click('button[type="submit"]');
-
-  // Poll the outbox rather than a navigation event: the mail landing is the
-  // thing we actually need, and it is written after the response returns.
-  let link = null;
-  for (let i = 0; i < 50 && !link; i += 1) {
-    await page.waitForTimeout(200);
-    link = await latestMagicLink();
-  }
-  if (!link) throw new Error(`no magic link for ${email}`);
-  await page.goto(link, { waitUntil: "domcontentloaded" });
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
-  if (page.url().includes("/pin")) {
-    await page.fill('input[name="pin"]', PIN);
-    await page.fill('input[name="confirm"]', PIN);
-    await Promise.all([
-      page.waitForURL(/\/dashboard/, { timeout: 20_000 }),
-      page.click('button[type="submit"]'),
-    ]);
-  }
-  return { ctx, page };
-}
 
 /** One SCHEDULED shift at a fully configured site. Same fixture as milestone 4. */
 async function resetGuardShifts() {
@@ -172,7 +127,7 @@ async function main() {
   console.log(`fixture: one SCHEDULED shift at ${site}\n`);
 
   const browser = await chromium.launch();
-  const { ctx, page } = await signIn(browser, GUARD_EMAIL);
+  const { ctx, page } = await signIn(browser, GUARD_EMAIL, { base: BASE, sql });
 
   // ---------------------------------------------------------------- upload
   console.log("— upload and worker —");
