@@ -6,9 +6,8 @@ import {
   findSignInUserByEmail,
 } from "@/lib/db/auth-adapter";
 import { record as recordAudit } from "@/lib/db/audit";
-import { getEmailProvider } from "@/lib/email/provider";
-import { magicLinkEmail } from "@/lib/email/templates";
 import { authConfig, MAGIC_LINK_MAX_AGE_SECONDS } from "./config";
+import { deliverMagicLink } from "./magic-link";
 
 /**
  * Node-only. Adds the adapter and the magic-link provider to the edge-safe
@@ -26,25 +25,12 @@ const magicLink: Provider = {
   maxAge: MAGIC_LINK_MAX_AGE_SECONDS,
   options: {},
 
-  async sendVerificationRequest({ identifier, url }) {
-    // Transient has no self-registration, so a link to an unknown address would
-    // be undeliverable anyway. Returning quietly rather than throwing keeps the
-    // sign-in form's response identical for known and unknown addresses, so it
-    // cannot be used to enumerate who has an account.
-    const user = await findSignInUserByEmail(identifier);
-    if (!user) {
-      console.info(`[auth] sign-in requested for unknown address, not sending`);
-      return;
-    }
-
-    await getEmailProvider().send(
-      magicLinkEmail({
-        to: identifier,
-        url,
-        expiresInMinutes: Math.round(MAGIC_LINK_MAX_AGE_SECONDS / 60),
-      }),
-    );
-  },
+  // Transient has no self-registration, so a link to an unknown address would
+  // be undeliverable anyway. `deliverMagicLink` returns quietly for an unknown
+  // address *and* for a failed send, which is what keeps the sign-in form's
+  // response identical either way, so it cannot be used to enumerate who has
+  // an account. It never throws by design; see that module for why.
+  sendVerificationRequest: deliverMagicLink,
 };
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
