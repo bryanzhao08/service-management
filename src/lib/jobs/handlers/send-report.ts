@@ -12,6 +12,7 @@ import {
 import { getEmailProvider, MAX_ATTACHMENT_BYTES } from "@/lib/email/provider";
 import { reportEmail, type ReportEmailIncident } from "@/lib/email/report-email";
 import { storage } from "@/lib/storage/driver";
+import { baseUrl } from "@/lib/url";
 import { formatDateTimeArchival, formatClock, isoDateInZone } from "@/lib/time";
 
 /**
@@ -226,12 +227,4 @@ function firstLine(text: string | null): string {
   const line = (text ?? "").split("\n")[0]?.trim() ?? "";
   if (!line) return "No description";
   return line.length > 90 ? `${line.slice(0, 89)}\u2026` : line;
-}
-
-function baseUrl(): string {
-  return (
-    process.env.NEXTAUTH_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3210"
-  );
 }

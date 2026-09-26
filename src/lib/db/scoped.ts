@@ -257,6 +257,28 @@ export function db(actor: Actor) {
         });
       },
       /**
+       * Sites this actor may actually work tonight.
+       *
+       * The dashboard needs this because a scheduled `Shift` row is a
+       * convenience, not a precondition: a contract guard is handed a post and
+       * works it, and the office often schedules after the fact or not at all.
+       * Without this the product dead-ends at "No shifts scheduled for you"
+       * with no control on the screen, which is exactly what it did.
+       */
+      assignedSitesForActor() {
+        return prisma.site.findMany({
+          where: visible.site(actor),
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            timezone: true,
+            loggingMode: true,
+          },
+          orderBy: { name: "asc" },
+        });
+      },
+      /**
        * Another guard's shift at the same site that is still open — section
        * 9.2 step 2's trigger for showing the handoff step. Scoped through
        * `visible.shift`, so it cannot surface a shift from another company.
@@ -453,6 +475,28 @@ export function db(actor: Actor) {
             data: { text: input.text },
             include: { incident: true, packageInfo: true, media: true },
           });
+        });
+      },
+
+      /**
+       * One entry with everything its detail view shows (section 9.3's "tapping
+       * opens the detail view"). The revisions come newest-first because the
+       * page reads them as history: "was X, changed by Y at Z".
+       */
+      async findByIdForDetail(id: string) {
+        return prisma.entry.findFirst({
+          where: { id, shift: visible.shift(actor) },
+          include: {
+            incident: true,
+            packageInfo: true,
+            media: { orderBy: { capturedAt: "asc" } },
+            area: true,
+            shift: { include: { site: true } },
+            revisions: {
+              orderBy: { editedAt: "desc" },
+              include: { editedBy: { select: { name: true, email: true } } },
+            },
+          },
         });
       },
 
@@ -787,6 +831,53 @@ export function db(actor: Actor) {
     // -----------------------------------------------------------------------
     // Shift lifecycle writes
     // -----------------------------------------------------------------------
+
+    /**
+     * Open a shift that was never scheduled.
+     *
+     * Section 9.1 assumed a `Shift` row always exists by the time a guard
+     * opens the app. It often does not: a contract guard gets handed a post
+     * and works it, and the schedule is written afterwards, or never. Without
+     * this the dashboard has nothing to offer and the guard cannot work.
+     *
+     * Idempotent on `clientId`, for the same reason `clockIn` is: this is the
+     * first tap of the night, on whatever signal the door has, and it will be
+     * tapped twice. `upsert` on the unique `clientId` makes the second tap
+     * return the first shift rather than open a duplicate one.
+     *
+     * The scheduled window is the claim the guard is making — "I am on from
+     * now until roughly then" — so it is stored rather than left null, and the
+     * report later shows scheduled against actual like any other shift.
+     */
+    async openUnscheduledShift(input: {
+      siteId: string;
+      clientId: string;
+      at: Date;
+      expectedHours?: number;
+    }) {
+      const site = await prisma.site.findFirst({
+        where: { id: input.siteId, ...visible.site(actor) },
+        select: { id: true },
+      });
+      if (!site) throw new NotVisibleError("site", input.siteId);
+
+      const hours = Math.min(Math.max(input.expectedHours ?? 8, 1), 24);
+      const end = new Date(input.at.getTime() + hours * 60 * 60 * 1000);
+
+      return prisma.shift.upsert({
+        where: { clientId: input.clientId },
+        create: {
+          siteId: site.id,
+          guardId: actor.userId,
+          clientId: input.clientId,
+          scheduledStart: input.at,
+          scheduledEnd: end,
+          status: ShiftStatus.SCHEDULED,
+        },
+        update: {},
+        include: { site: true },
+      });
+    },
 
     /**
      * Clock in. Idempotent twice over, because this is the single most likely

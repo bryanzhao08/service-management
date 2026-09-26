@@ -31,8 +31,11 @@ import pg from "pg";
 
 // Must match AUTH_URL, or the session cookie set by the magic link is for a
 // different origin and every authenticated check silently redirects to sign-in.
-const BASE =
-  process.env.BASE ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3210";
+// Deliberately NOT falling back to NEXT_PUBLIC_APP_URL. That is a deployment
+// setting, and `.env` points it at :3000, where a different project runs — so
+// this gate would quietly audit somebody else's app and report whatever it
+// found. Same default as the sibling gates, overridable by BASE only.
+const BASE = process.env.BASE ?? "http://localhost:3210";
 const OUTBOX = path.resolve(".data/outbox");
 const GUARD_EMAIL = "guard.night@meridian.test";
 const PIN = "4821";

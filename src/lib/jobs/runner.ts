@@ -12,6 +12,7 @@ import {
 import { buildReport } from "./handlers/build-report";
 import { processMedia, processMediaPayload } from "./handlers/process-media";
 import { sendReport } from "./handlers/send-report";
+import { verifyRecipient } from "./handlers/verify-recipient";
 
 /**
  * The worker (section 5).
@@ -29,14 +30,15 @@ import { sendReport } from "./handlers/send-report";
 type Handler = (payload: unknown) => Promise<unknown>;
 
 /**
- * Handlers by type. Milestones 9 and 10 fill in the rest; a job type with
- * no handler is a configuration error, not a transient failure, so it fails
- * fast to FAILED rather than retrying five times against nothing.
+ * Handlers by type. Milestone 10 adds SEND_PUSH; a job type with no handler is
+ * a configuration error, not a transient failure, so it fails fast to FAILED
+ * rather than retrying five times against nothing.
  */
 const HANDLERS: Partial<Record<JobType, Handler>> = {
   PROCESS_MEDIA: processMedia,
   GENERATE_REPORT: buildReport,
   SEND_REPORT: sendReport,
+  VERIFY_RECIPIENT: verifyRecipient,
 };
 
 export class UnhandledJobTypeError extends Error {

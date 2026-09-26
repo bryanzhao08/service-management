@@ -85,3 +85,74 @@ export function magicLinkEmail(params: {
 
   return { to, subject: "Your Transient sign-in link", html, text };
 }
+
+/**
+ * "Confirm you receive Transient reports."
+ *
+ * Sent to someone who has no account and did not ask for this: a duty manager
+ * at a hotel whose security vendor just added them to a report list. So the
+ * email says who added them and for which site before it asks for anything,
+ * and the ignore-path is spelled out. An unexplained "confirm your email"
+ * from a brand they have never heard of is indistinguishable from phishing,
+ * and the one thing worse than an unverified recipient is a recipient who
+ * reports us as a phisher.
+ */
+export function verifyRecipientEmail(params: {
+  to: string;
+  name: string;
+  siteName: string;
+  companyName: string;
+  url: string;
+}): EmailMessage {
+  const { to, name, siteName, companyName, url } = params;
+
+  const html = shell(
+    "Do you receive shift reports?",
+    `<p style="margin:0 0 24px;font-size:16px;line-height:1.5;">
+       Hi ${name}, ${companyName} uses Transient to send the nightly security
+       report for <strong>${siteName}</strong>, and they have listed this
+       address as somewhere it should go.
+     </p>
+     <p style="margin:0 0 24px;font-size:16px;line-height:1.5;">
+       One tap confirms the address works. That is all it does. It does not
+       create an account and it does not sign you up for anything else.
+     </p>
+     <p style="margin:0 0 24px;">
+       <a href="${url}"
+          style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
+         Confirm I receive these reports
+       </a>
+     </p>
+     <p style="margin:0 0 8px;font-size:13px;opacity:0.7;">
+       If the button does not work, paste this into your browser:
+     </p>
+     <p style="margin:0 0 24px;font-size:13px;word-break:break-all;opacity:0.7;">${url}</p>
+     <p style="margin:0;font-size:13px;opacity:0.7;">
+       If you should not be receiving these, ignore this email and tell
+       ${companyName} to take you off the list. We will keep showing them this
+       address as unconfirmed until someone does.
+     </p>`,
+  );
+
+  const text = [
+    "Do you receive shift reports?",
+    "",
+    `Hi ${name}, ${companyName} uses Transient to send the nightly security report`,
+    `for ${siteName}, and they have listed this address as somewhere it should go.`,
+    "",
+    "One tap confirms the address works. That is all it does. It does not create",
+    "an account and it does not sign you up for anything else.",
+    "",
+    url,
+    "",
+    `If you should not be receiving these, ignore this email and tell ${companyName}`,
+    "to take you off the list.",
+  ].join("\n");
+
+  return {
+    to,
+    subject: `Confirm you receive ${siteName} shift reports`,
+    html,
+    text,
+  };
+}

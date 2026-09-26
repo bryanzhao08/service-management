@@ -51,6 +51,13 @@ export default auth((req) => {
     // it, and both landed on a sign-in page.
     pathname.startsWith("/r/") ||
     pathname.startsWith("/g/") ||
+    // The recipient confirming their address. They are, by definition, someone
+    // with no account: a duty manager at a hotel whose security vendor added
+    // them to a list. Sending them to a sign-in page would make the
+    // verification loop impossible to close, which would leave every recipient
+    // permanently UNVERIFIED and the bounce-detection story with nothing to
+    // stand on.
+    pathname.startsWith("/confirm/") ||
     pathname === "/api/uploads/local";
 
   if (!req.auth && !isPublic) {

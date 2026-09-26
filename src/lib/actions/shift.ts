@@ -85,6 +85,41 @@ export async function startShift(
 }
 
 // ---------------------------------------------------------------------------
+// Open an unscheduled shift
+// ---------------------------------------------------------------------------
+
+const openShiftSchema = z.object({
+  siteId: z.string().min(1),
+  clientId,
+  occurredAt: z.coerce.date().optional(),
+});
+
+/**
+ * Creates the `Shift` row for a guard who was never scheduled, then hands back
+ * its id so the caller can send them to the normal start screen. Everything
+ * after this point — clock in, checklist, entries, report — is the existing
+ * path; this only removes the precondition that someone in an office had to
+ * create the row first.
+ */
+export async function openUnscheduledShift(
+  input: z.input<typeof openShiftSchema>,
+): Promise<ActionResult<{ shiftId: string }>> {
+  const parsed = openShiftSchema.safeParse(input);
+  if (!parsed.success) return failure("INVALID", "Could not open that shift.");
+  const scoped = db(await requireActor());
+
+  return guarded(async () => {
+    const shift = await scoped.openUnscheduledShift({
+      siteId: parsed.data.siteId,
+      clientId: parsed.data.clientId,
+      at: parsed.data.occurredAt ?? new Date(),
+    });
+    revalidatePath("/dashboard");
+    return { shiftId: shift.id };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Handoff
 // ---------------------------------------------------------------------------
 

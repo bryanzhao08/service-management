@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StartUnscheduled } from "@/components/shift/start-unscheduled";
 import { can, requireUnlockedActor } from "@/lib/auth/guards";
 import { db, type Actor } from "@/lib/db/scoped";
 import { averageEndFlowMs } from "@/lib/db/shift-end";
@@ -48,11 +49,12 @@ export default async function DashboardPage() {
 
 async function GuardView({ actor }: { actor: Actor }) {
   const scoped = db(actor);
-  const [active, startable, recent, pace] = await Promise.all([
+  const [active, startable, recent, pace, assignedSites] = await Promise.all([
     scoped.shift.findActiveForActor(),
     scoped.shift.findStartableForActor(),
     scoped.shift.recentReportsForActor(3),
     averageEndFlowMs(actor.userId, startOfMonth()),
+    scoped.shift.assignedSitesForActor(),
   ]);
 
   // An active shift is the only thing that matters while it is running, so it
@@ -101,11 +103,7 @@ async function GuardView({ actor }: { actor: Actor }) {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="py-10 text-center">
-            <p className="text-text-muted">No shifts scheduled for you.</p>
-          </CardContent>
-        </Card>
+        <StartUnscheduled sites={assignedSites} />
       )}
 
       {/* More than one assignment, so the picker is the list itself rather
