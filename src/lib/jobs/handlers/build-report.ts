@@ -14,6 +14,7 @@ import { producesReport } from "@/lib/sites/logging-mode";
 import { renderReport } from "@/lib/reports/render";
 import { storage } from "@/lib/storage/driver";
 import { reportKey } from "@/lib/storage/keys";
+import { appUrl } from "@/lib/url";
 
 /**
  * `BUILD_REPORT` (section 11).
@@ -93,7 +94,7 @@ export async function buildReport(rawPayload: unknown): Promise<BuildReportResul
       shiftId: report.shiftId,
       reportId: report.id,
       version: report.version,
-      galleryUrl: galleryUrl(token),
+      galleryUrl: appUrl(`/g/${token}`),
       galleryExpiresAt: expiresAt,
     });
 
@@ -125,9 +126,4 @@ export async function buildReport(rawPayload: unknown): Promise<BuildReportResul
     await markReportFailed(reportId, err instanceof Error ? err.message : String(err));
     throw err;
   }
-}
-
-function galleryUrl(token: string): string {
-  const base = process.env["APP_URL"] ?? "http://localhost:3000";
-  return `${base.replace(/\/$/, "")}/g/${token}`;
 }

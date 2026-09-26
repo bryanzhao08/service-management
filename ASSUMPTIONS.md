@@ -795,6 +795,43 @@ port.
 
 ## Milestone 13 — final pass
 
+**PIN rate limiting does not survive horizontal scaling.** `src/lib/auth/pin.ts`
+argues, correctly, that a 4-digit PIN has 10,000 possibilities so the argon2id
+hash is not what protects it — rate limiting is. That argument holds on one
+instance. The attempt counter is a per-process `Map`, so on a platform that runs
+several instances (Vercel, the documented deploy target) the effective ceiling
+is five attempts *per instance* rather than five per user, and a lockout is lost
+entirely on redeploy.
+
+Two things keep this off the blocker list. The PIN is a second factor on an
+already-authenticated session, never a credential on its own: `verifyPin` is
+only ever called for the signed-in user's own id, so an attacker needs a device
+that is already signed in through a magic link to that user's inbox. And argon2id
+at ~19 MiB still prices each guess. But the security claim in that comment is
+weaker in production than it reads, and the honest fix is a shared counter
+(Postgres row or Redis) rather than a process-local one. Not built.
+
+**The gallery link in the PDF pointed at localhost, in every environment.**
+Found by the pre-push review, not by a test. `build-report.ts` had grown its own
+`process.env["APP_URL"]` read for the gallery link, and `APP_URL` is set nowhere
+in this repo — not in `.env.example`, not in the README — so it always fell
+through to `http://localhost:3000`. `render.ts` then encodes that string into the
+QR code on the report. The same report disagreed with itself: the gallery link in
+the covering email was correct, because `send-report.ts` uses `baseUrl()`, while
+the QR a client actually scans pointed at their own phone.
+
+It survived 329 tests because `tests/db/report-render.test.ts` passes
+`galleryUrl` in as a fixture literal. That exercises the renderer, which was
+never wrong — it faithfully renders whatever URL it is handed — and never the
+caller that computes it. A test that supplies the value the bug corrupts cannot
+see the bug, which is the sixth instance of that pattern in this build.
+
+The fix routes it through `appUrl()`, the function `src/lib/url.ts` already
+existed to be. The pin is `tests/unit/absolute-links.test.ts`, which asserts the
+invariant across the whole source tree rather than the one call site, because
+the next handler that needs an absolute link is one `process.env` read away from
+doing this again.
+
 **Most of the pricing table is not enforced.** There are 14 entitlements and
 exactly two are checked anywhere in the app: `audit_export` and `push_alerts`.
 The other twelve (`client_portal`, `custom_templates`, `white_label`,
