@@ -158,6 +158,7 @@ a working local fallback, which is what lets the quick start run offline.
 | `RESEND_WEBHOOK_SECRET` | optional | Verifies delivery webhooks. |
 | `STORAGE_DRIVER` | yes | `local` or `s3`. |
 | `S3_ENDPOINT` `S3_REGION` `S3_BUCKET` `S3_ACCESS_KEY_ID` `S3_SECRET_ACCESS_KEY` `S3_FORCE_PATH_STYLE` | if `s3` | Any S3-compatible service. |
+| `S3_SESSION_TOKEN` | no | Only for temporary credentials: AWS STS or an assumed IAM role. Long-lived keys (R2, MinIO) leave it unset. |
 | `VAPID_PUBLIC_KEY` `VAPID_PRIVATE_KEY` `NEXT_PUBLIC_VAPID_PUBLIC_KEY` `VAPID_SUBJECT` | optional | Web Push. Absent → push is skipped and logged. `pnpm gen:vapid`. |
 | `SWEEP_URL` | optional | Override the URL `pnpm jobs:sweep` calls. |
 
@@ -181,6 +182,32 @@ S3_FORCE_PATH_STYLE=true      # MinIO and R2 need this; AWS does not
 ```
 
 For real S3 drop `S3_ENDPOINT`, set `S3_REGION`, and leave path style off.
+
+**Cloudflare R2** is what the deployed build uses. It is S3-compatible with
+long-lived keys, so `S3_SESSION_TOKEN` stays unset. Create the bucket, then an
+R2 API token (Account → R2 → Manage API Tokens) scoped to Object Read & Write;
+that screen is the only place the secret is shown.
+
+```bash
+STORAGE_DRIVER=s3
+S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+S3_REGION=auto
+S3_BUCKET=transient-media
+S3_ACCESS_KEY_ID=<R2 access key id>
+S3_SECRET_ACCESS_KEY=<R2 secret access key>
+S3_FORCE_PATH_STYLE=true
+```
+
+R2's region is the literal string `auto`, and egress is free, which is the
+reason to prefer it here: this app serves photo galleries and report PDFs to
+clients, so egress is the cost that would otherwise grow with usage.
+
+Some providers issue *temporary* credentials instead, signing with three fields
+rather than two — AWS STS, an assumed IAM role, or Supabase Storage (access key
+id = project ref, secret = anon key, `S3_SESSION_TOKEN` = service-role JWT).
+Handed only the first two those answer `InvalidAccessKeyId` on every request.
+R2 does not need this.
+
 Add the bucket's public origin to the CSP in `next.config.ts` — the config
 already threads a `storageOrigin` into `img-src`, `media-src` and `connect-src`
 for exactly this.
@@ -255,7 +282,9 @@ cannot read another's sites — `tests/db/` asserts that directly, and
 ## Deploying to Vercel
 
 1. Push the repo and import it. Framework detection handles the build.
-2. Provision Postgres (Neon, Supabase, RDS) and set `DATABASE_URL`.
+2. Provision Postgres (Neon is what this deploy uses) and set `DATABASE_URL`.
+   Migrations do not run themselves — apply them with
+   `DATABASE_URL=<direct url> pnpm db:deploy` before the first request.
 3. Set every **required** variable above. `AUTH_URL` and `NEXT_PUBLIC_APP_URL`
    must be the real `https://` origin — CSP emits
    `upgrade-insecure-requests` only when they are https, so an http value

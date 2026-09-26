@@ -195,6 +195,7 @@ class S3StorageDriver implements StorageDriver {
   constructor() {
     this.bucket = requireEnv("S3_BUCKET");
     const endpoint = process.env["S3_ENDPOINT"];
+    const sessionToken = process.env["S3_SESSION_TOKEN"];
     this.client = new S3Client({
       region: process.env["S3_REGION"] ?? "us-east-1",
       ...(endpoint
@@ -205,6 +206,12 @@ class S3StorageDriver implements StorageDriver {
       credentials: {
         accessKeyId: requireEnv("S3_ACCESS_KEY_ID"),
         secretAccessKey: requireEnv("S3_SECRET_ACCESS_KEY"),
+        // Temporary credentials sign with a third field: STS and assumed IAM
+        // roles issue them, and a provider that expects one rejects the
+        // key/secret pair on its own with InvalidAccessKeyId, so omitting it
+        // is not a degraded mode, it is a hard failure on every request. R2
+        // and MinIO use long-lived keys and leave this unset.
+        ...(sessionToken ? { sessionToken } : {}),
       },
     });
   }
