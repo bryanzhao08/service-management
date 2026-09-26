@@ -73,6 +73,10 @@ export default async function ShiftPage({
         areaName: entry.area?.name ?? null,
         revisionCount: entry.revisions.length,
         mediaCount: entry.media.length,
+        // The ids, not URLs: the client builds `/api/media/<id>?variant=thumb`
+        // so the route stays the one place that decides which stored object a
+        // viewer is allowed to see.
+        media: entry.media.map((m) => ({ id: m.id, status: m.status })),
         incident: entry.incident
           ? {
               id: entry.incident.id,

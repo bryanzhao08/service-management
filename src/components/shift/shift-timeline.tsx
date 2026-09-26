@@ -36,6 +36,7 @@ export interface TimelineEntryData {
   areaName: string | null;
   revisionCount: number;
   mediaCount: number;
+  media?: Array<{ id: string; status: string }>;
   incident: {
     id: string;
     code: string;
@@ -394,6 +395,46 @@ function SyncDot({ pending }: { pending: number }) {
   );
 }
 
+/**
+ * The thumbnails the media worker produced.
+ *
+ * Requests `?variant=thumb` — a 400px JPEG instead of the 2048px original, which
+ * on a guard's phone over a bad connection is the difference between a timeline
+ * that paints and one that hangs. The route falls back to the original when the
+ * worker has not run yet, so a just-taken photo still shows.
+ *
+ * `PENDING` rows are skipped rather than rendered as a broken image: until the
+ * worker finishes there is nothing to show but the original, and the sheet the
+ * guard just closed already showed them that.
+ */
+function EntryThumbs({ media }: { media?: Array<{ id: string; status: string }> }) {
+  const shown = (media ?? []).filter((m) => m.status !== "FAILED").slice(0, 4);
+  if (shown.length === 0) return null;
+
+  return (
+    <span className="mt-2 flex gap-1.5">
+      {shown.map((item) => (
+        // Deliberately not `next/image`. That optimizer fetches the source URL
+        // from the server, with no viewer session attached, so an auth-gated
+        // media route would answer it 401 and every thumbnail would break. The
+        // bytes are already a 400px JPEG the worker produced, which is what
+        // `next/image` would have been for.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={item.id}
+          src={`/api/media/${item.id}?variant=thumb`}
+          // Decorative here: the entry text above is the label, and a filename
+          // or "photo 2 of 4" would only add noise to a screen reader.
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="size-12 rounded-md border border-border object-cover"
+        />
+      ))}
+    </span>
+  );
+}
+
 function TimelineRow({
   entry,
   timezone,
@@ -460,6 +501,12 @@ function TimelineRow({
                 {entry.mediaCount}
               </Badge>
             ) : null}
+            {entry.media?.some((m) => m.status === "FAILED") ? (
+              // Worth its own badge. A photo the guard watched upload, that then
+              // failed to process, otherwise just never appears — and they would
+              // have no way to know to take it again.
+              <Badge tone="danger">Photo failed</Badge>
+            ) : null}
             {incident?.severity ? (
               <Badge tone={incident.severity === "HIGH" ? "danger" : "neutral"}>
                 {incident.severity.toLowerCase()}
@@ -478,6 +525,8 @@ function TimelineRow({
             ) : null}
             {deleted ? <Badge tone="outline">Removed</Badge> : null}
           </span>
+
+          <EntryThumbs media={entry.media} />
         </span>
       </Link>
     </li>

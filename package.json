@@ -30,6 +30,8 @@
     "gen:icons": "tsx scripts/gen-icons.ts",
     "check:auth": "node scripts/check-auth.mjs",
     "check:landing": "node scripts/check-landing.mjs",
+    "check:shift": "node scripts/check-shift.mjs",
+    "check:jobs": "node scripts/check-jobs.mjs",
     "check:lighthouse": "node scripts/check-lighthouse.mjs",
     "verify": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm contrast:check && pnpm test"
   },

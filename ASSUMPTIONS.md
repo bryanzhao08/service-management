@@ -489,3 +489,136 @@ otherwise name exactly.
 The axe pass covers the timeline and all four sheets. It is not vacuous:
 removing `aria-label` from the offscreen file input fails **exactly one** check,
 the Photo sheet, and the file restores byte-identical afterwards.
+
+## Milestone 5 — media pipeline, job queue, retention
+
+### The queue is Postgres, and `FOR UPDATE SKIP LOCKED` is the whole reason
+
+There is no Redis and no external broker. `Job` is a table, `claimJobs` takes
+rows with `FOR UPDATE SKIP LOCKED`, and that one clause is what makes it a queue
+rather than a list. Proven by removing it: two concurrent `claimJobs(10)` calls
+against ten rows then return the **same ten**, and exactly one test of fifteen
+goes red. Every other test still passes, which is why it is worth a control —
+the bug is invisible until two workers run at once, and then it double-processes
+everything.
+
+### Prisma `DateTime` is `timestamp without time zone`, so raw SQL must say UTC
+
+This cost more time than anything else in this milestone and it never raised an
+error. Prisma maps `DateTime` to `timestamp without time zone` holding UTC
+digits. `now()` returns `timestamptz`. Comparing the two makes Postgres
+reinterpret the stored digits in the **session** time zone, so on a machine set
+to `America/Los_Angeles` every job enqueued for "now" looked seven hours in the
+future and was never claimed. The queue did not fail, it just silently stopped.
+
+**Rule: raw SQL comparing against a Prisma `DateTime` uses
+`(now() AT TIME ZONE 'UTC')`, never bare `now()`.** It is written above
+`claimJobs` in `src/lib/db/jobs.ts` so the next person reads it before they
+write the next query. Reverting the fix fails **nine** of fifteen tests.
+
+Prisma's own ORM methods are already correct, because the driver sends a JS
+`Date` and writes UTC digits. The danger is mixing the two: a raw-SQL
+`lockedAt = now()` write read back through an ORM `lt: cutoff` would be seven
+hours out in the other direction.
+
+### Jobs are deliberately not company-scoped
+
+`Job` has no `companyId`, which is the one place in this codebase that breaks the
+scoping rule everywhere else enforces. A worker has no session and no viewer, so
+there is nothing to scope *to*. What makes it safe is narrower than a column:
+payloads are written only by trusted server code, and **every handler re-derives
+the company from the database** rather than trusting the payload. If a future
+handler reads a `companyId` out of a payload and uses it, that assumption is
+broken and this note is the thing that was violated.
+
+### `Media.width` and `Media.height` are client-reported
+
+The browser compresses before upload and posts its own dimensions;
+`POST /api/media` records them as given. The worker never writes them back. So
+they are a convenience for layout, not a fact about the bytes, and nothing
+security-relevant may depend on them. The byte count is different — that one is
+read from storage.
+
+I only learned this because a negative control caught me overclaiming. The gate
+had a check labelled "worker recorded the original dimensions", and when I
+disabled the worker entirely that check **still passed**. It was reading a value
+the client had sent. Renamed to "the client compressed before upload and the row
+records it", which is what it actually proves.
+
+### Objects are written before rows, in both directions
+
+The worker writes the thumb and pdf objects and only then marks the row
+`PROCESSED`. A crash in between leaves an orphan object, which the sweep
+reclaims. The other order leaves a row naming bytes that do not exist, and every
+reader 404s on a photo the UI insists is there.
+
+Retention runs the same way round: delete the objects, then the rows. The row is
+the only thing that names the object, so losing it first loses the bytes
+forever.
+
+### Retention is dated from the shift, not the upload
+
+`expiredMedia()` measures against the shift's date, not `Media.createdAt`. A
+photo uploaded late, or re-uploaded after a failure, belongs to the incident it
+documents rather than to the moment it happened to reach the server. A client
+asking "keep 90 days" means 90 days of *shifts*.
+
+### A missing media row is job success, not failure
+
+Retention can delete a row between the moment a job is enqueued and the moment
+it runs. The handler returns `"gone"` and succeeds. Treating it as a failure
+would retry five times and end `FAILED`, filling the failure count with rows
+that were correctly deleted.
+
+### A failed job must mark its subject
+
+`runJobs` calls `markSubjectFailed` when a handler gives up. Without it the
+photo sits on "processing" forever with nothing anywhere explaining why, and the
+only record is a `Job` row no screen displays. The timeline shows **Photo
+failed**, and the media route 404s rather than redirecting to an object that was
+never written.
+
+### `next/image` is wrong for auth-gated media
+
+Its optimizer fetches the source URL server-side, with no viewer session. Our
+media route would 401 that fetch and every thumbnail in the app would break.
+`EntryThumbs` uses a plain `<img>` with the lint rule disabled and a comment
+saying why, which is the honest version of the tradeoff: we lose the optimizer
+and keep the authorization.
+
+### Video is stored but not processed
+
+`PROCESS_MEDIA` marks video `PROCESSED` with no variants. ffmpeg poster frames
+are section 10.4's optional item and are not built, so a video entry shows no
+thumbnail. It is a gap in the UI, not a broken state — the row is correct and
+the original plays.
+
+### The nudge is an optimization; the sweep is the guarantee
+
+`enqueueAndKick` commits the row and then calls `after()` to run the job in the
+same request. Its errors are swallowed on purpose. If the nudge dies, the
+one-minute cron on `/api/jobs/sweep` picks the job up, which the gate proves by
+enqueueing an orphaned job no nudge ever saw and watching the sweep drain it.
+
+`CRON_SECRET` fails **closed**: unset gives 503 rather than an open endpoint,
+and the comparison is length-safe constant-time. The gate includes a
+one-character-short secret because a naive `timingSafeEqual` throws on unequal
+lengths, and a thrown comparison is an easy accidental 500 where a 401 belongs.
+
+### What `scripts/check-jobs.mjs` actually proves
+
+27 checks against a real browser, a real build, a real database and real sharp
+encodes. Variant sizes are read by decoding JPEG SOF markers over HTTP, not by
+trusting what the worker claims it wrote: thumb comes back **400x300**, pdf
+**1600x1200**, original **2048x1536** untouched. The timeline is watched for
+network requests and asked to have fetched thumbs and never the original.
+
+Controls: a permanently broken job ends `FAILED` at exactly five attempts rather
+than looping, the failure is recorded rather than swallowed, and the photo 404s
+instead of serving an object that does not exist. Isolation is tested against
+another guard **in the same company**, since company scoping alone would let a
+different-company row through for the wrong reason.
+
+The gate's own negative control is the one worth keeping: stubbing out
+`enqueueAndKick` in `POST /api/media` fails seven checks, all downstream of the
+nudge, and it is what exposed the dimensions overclaim above.

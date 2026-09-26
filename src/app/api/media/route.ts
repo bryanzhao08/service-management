@@ -4,6 +4,7 @@ import { z } from "zod";
 import { currentActor } from "@/lib/auth/guards";
 import { db, NotVisibleError } from "@/lib/db/scoped";
 import { storage } from "@/lib/storage/driver";
+import { enqueueAndKick } from "@/lib/jobs/enqueue";
 import { companyIdFromKey, mediaKey } from "@/lib/storage/keys";
 
 import { MAX_PHOTO_BYTES, MAX_VIDEO_BYTES } from "../uploads/presign/route";
@@ -22,8 +23,9 @@ import { MAX_PHOTO_BYTES, MAX_VIDEO_BYTES } from "../uploads/presign/route";
  * some other company's object, and every later signed GET would honour it.
  * `companyIdFromKey` is a second, cheaper check of the same property.
  *
- * Enqueuing `PROCESS_MEDIA` is milestone 5's job; the row lands `PENDING`,
- * which is exactly the state that worker looks for.
+ * Recording the row enqueues `PROCESS_MEDIA` and nudges the worker, so the
+ * thumbnail is usually ready by the time the grid re-renders. The nudge is an
+ * optimisation; the sweep is what guarantees delivery.
  */
 
 export const runtime = "nodejs";
@@ -105,6 +107,12 @@ export async function POST(request: Request): Promise<Response> {
       height: body.height ?? null,
       capturedAt: body.capturedAt,
     });
+
+    // After the row exists, never before: a job naming a media id that has
+    // not committed yet would run, find nothing and burn an attempt.
+    if (media.status === "PENDING") {
+      await enqueueAndKick("PROCESS_MEDIA", { mediaId: media.id });
+    }
 
     return NextResponse.json({
       id: media.id,
