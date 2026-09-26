@@ -59,6 +59,17 @@ type RecipientRow = {
   status: RecipientStatus;
 };
 
+/**
+ * Counts only. The provider's own error text stays server-side: a guard needs
+ * to know the report did not go out and that retrying is the move, not that
+ * an API returned `validation_error`.
+ */
+type DeliveryOutcomes = {
+  total: number;
+  failed: number;
+  sent: number;
+};
+
 export function EndOfShiftFlow(props: {
   shiftId: string;
   siteName: string;
@@ -84,6 +95,17 @@ export function EndOfShiftFlow(props: {
   handoffNote: string;
   recipients: RecipientRow[];
   oneOffs: string[];
+  /**
+   * How this report's deliveries have actually gone, or null when no report
+   * has been built yet.
+   *
+   * The report row alone cannot answer this. A report whose every delivery
+   * failed is still `READY` with a null `sentAt`, which is byte-for-byte the
+   * state of a report nobody has tried to send. Without this the screen shows
+   * a guard the same thing either way, and the send half of the flow fails
+   * silently.
+   */
+  delivery: DeliveryOutcomes | null;
   /** Null when the deployment has no VAPID keys; the prompt stays hidden. */
   vapidPublicKey: string | null;
   reports: ReportRow[];
@@ -201,6 +223,7 @@ export function EndOfShiftFlow(props: {
           report={latest}
           recipients={props.recipients}
           oneOffs={props.oneOffs}
+          delivery={props.delivery}
           busy={busy}
           vapidPublicKey={props.vapidPublicKey}
           onSend={() => run(() => sendReport(props.shiftId, latest.id))}
@@ -223,10 +246,21 @@ export function EndOfShiftFlow(props: {
       ) : null}
 
       {step >= 3 && sends ? (
-        <p className="text-center text-sm text-text-muted">
-          It&rsquo;s safe to clock out. We&rsquo;ll push a notification when it&rsquo;s
-          delivered &mdash; or if anything bounces.
-        </p>
+        latest?.sentAt || props.alreadyClockedOut ? (
+          <p className="text-center text-sm text-text-muted">
+            It&rsquo;s safe to clock out. We&rsquo;ll push a notification when
+            it&rsquo;s delivered &mdash; or if anything bounces.
+          </p>
+        ) : (
+          // Not "it's safe to clock out". Clock-out is step 4, and step 4 only
+          // opens once a recipient has accepted the report, so saying that
+          // here would promise a button that is not on the screen. That exact
+          // pair -- the reassurance and no way to act on it -- is what a
+          // guard hits when the provider rejects every address.
+          <p className="text-center text-sm text-text-muted">
+            You can clock out once the report has been accepted.
+          </p>
+        )
       ) : sends ? (
         <p className="text-center text-sm text-text-muted">
           You can leave once step 3 is done; we&rsquo;ll notify you.
@@ -520,6 +554,7 @@ function SendStep({
   report,
   recipients,
   oneOffs,
+  delivery,
   busy,
   vapidPublicKey,
   onSend,
@@ -530,6 +565,7 @@ function SendStep({
   report: ReportRow;
   recipients: RecipientRow[];
   oneOffs: string[];
+  delivery: DeliveryOutcomes | null;
   busy: boolean;
   vapidPublicKey: string | null;
   onSend: () => void;
@@ -600,6 +636,23 @@ function SendStep({
         </CardContent>
       </Card>
 
+      {/* `sendReport` only enqueues: it returns ok the moment the job is
+          queued, long before any address is tried, so a total failure lands
+          after the button has already gone idle. Nothing else on this screen
+          moves when that happens -- the recipient badges show standing, not
+          tonight's outcome -- so without this the guard is left on a step that
+          will never advance, with no hint why. */}
+      {!sent && delivery && delivery.failed > 0 ? (
+        <p
+          role="alert"
+          className="rounded-md bg-danger px-3 py-2 text-sm text-on-danger"
+        >
+          We could not send this to {delivery.failed} of {delivery.total}{" "}
+          {delivery.total === 1 ? "recipient" : "recipients"}. Try again &mdash; if it
+          keeps failing, tell your supervisor before you leave.
+        </p>
+      ) : null}
+
       {sent ? (
         <>
           {/* Section 13's one-time ask, at the only moment a guard has a
@@ -613,7 +666,7 @@ function SendStep({
       ) : (
         <Button size="lg" onClick={onSend} busy={busy} className="w-full">
           <Send className="size-4" aria-hidden="true" />
-          Send report
+          {delivery && delivery.failed > 0 ? "Try sending again" : "Send report"}
         </Button>
       )}
     </div>

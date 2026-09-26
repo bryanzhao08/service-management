@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { EndOfShiftFlow } from "@/components/shift/end-of-shift-flow";
 import { requireUnlockedActor } from "@/lib/auth/guards";
+import { deliveryOutcomes } from "@/lib/db/deliveries";
 import { db } from "@/lib/db/scoped";
 import {
   endOfShiftData,
@@ -64,6 +65,13 @@ export default async function EndOfShiftPage({
   ]);
   if (!data) notFound();
 
+  // Sequential on purpose: the id comes from `listForShift`, which is the
+  // company-scoped read. Looking deliveries up by a report id that was never
+  // proven to belong to this company is how a counts endpoint becomes a
+  // cross-tenant probe.
+  const latestReport = reports[0] ?? null;
+  const delivery = latestReport ? await deliveryOutcomes(latestReport.id) : null;
+
   const prefilled = data.summary ?? summaryTemplate(data, formatClock);
   const capabilities = capabilitiesFor(data.loggingMode);
 
@@ -102,6 +110,7 @@ export default async function EndOfShiftPage({
         status: r.status,
       }))}
       oneOffs={recipients.oneOffs}
+      delivery={delivery}
       reports={reports.map((report) => ({
         id: report.id,
         version: report.version,

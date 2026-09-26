@@ -60,6 +60,37 @@ export async function deliveriesForReport(reportId: string) {
   });
 }
 
+/**
+ * Counts a report's deliveries by outcome, for the guard's end-of-shift screen.
+ *
+ * Counts only, deliberately. `lastError` holds whatever the provider said
+ * ("resend: validation_error: ..."), which is a supervisor's problem and not
+ * something to render on a guard's phone: they need to know it did not go and
+ * that trying again is the move, not which API rejected it.
+ *
+ * This is what separates "nobody has pressed Send yet" from "Send ran and
+ * every address failed". Without it the two are indistinguishable, because a
+ * report whose deliveries all failed is still READY with a null `sentAt` --
+ * the same row a freshly built report has.
+ */
+export async function deliveryOutcomes(reportId: string): Promise<{
+  total: number;
+  failed: number;
+  sent: number;
+}> {
+  // Bounded by the recipients configured for one site plus tonight's one-off
+  // CCs, so this is a handful of rows, not a scan.
+  const rows = await prisma.reportDelivery.findMany({
+    where: { reportId },
+    select: { status: true },
+  });
+  return {
+    total: rows.length,
+    failed: rows.filter((row) => row.status === "FAILED").length,
+    sent: rows.filter((row) => row.status === "SENT").length,
+  };
+}
+
 export async function markDeliverySent(
   id: string,
   providerMessageId: string,
