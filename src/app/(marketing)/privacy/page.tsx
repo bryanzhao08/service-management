@@ -18,7 +18,7 @@ export const dynamic = "force-static";
  */
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy" updated="September 2026">
+    <LegalPage title="Privacy" updated="September 2026" self="/privacy">
       <LegalSection title="What this page is">
         <p>
           This describes what the Transient software records and who can read it. It is

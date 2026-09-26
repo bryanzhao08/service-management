@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Logo } from "@/components/brand";
 import { Button } from "@/components/ui/button";
+import { SiteFooter } from "@/components/marketing/site-footer";
 
 /**
  * Chrome shared by the public legal pages. Separate from the app shell, which
@@ -10,10 +11,13 @@ import { Button } from "@/components/ui/button";
 export function LegalPage({
   title,
   updated,
+  self,
   children,
 }: {
   title: string;
   updated: string;
+  /** This page's own route, dropped from the footer so it cannot link to itself. */
+  self: string;
   children: React.ReactNode;
 }) {
   return (
@@ -40,22 +44,7 @@ export function LegalPage({
         <div className="mt-10 flex flex-col gap-8">{children}</div>
       </main>
 
-      <footer className="border-t border-border px-6 py-10">
-        <nav
-          aria-label="Footer"
-          className="mx-auto flex w-full max-w-3xl flex-wrap gap-x-6 gap-y-2 text-sm"
-        >
-          <Link href="/" className="text-text-muted hover:text-text">
-            Home
-          </Link>
-          <Link href="/privacy" className="text-text-muted hover:text-text">
-            Privacy
-          </Link>
-          <Link href="/terms" className="text-text-muted hover:text-text">
-            Terms
-          </Link>
-        </nav>
-      </footer>
+      <SiteFooter width="narrow" omit={[self]} />
     </>
   );
 }

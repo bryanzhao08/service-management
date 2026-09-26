@@ -19,6 +19,7 @@ const { auth } = NextAuth(authConfig);
 /** Reachable with no session. Everything else requires one. */
 const PUBLIC_PATHS = [
   "/",
+  "/pricing",
   "/sign-in",
   "/verify",
   "/privacy",

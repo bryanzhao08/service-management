@@ -664,3 +664,67 @@ would silently drop new sections from every existing site.
 formatter does not, because in the app you are looking at today. A report gets
 opened by an adjuster eighteen months later, and a date with no year is not
 evidence.
+
+## Pricing and packaging
+
+**Two products, two buyers.** Transient is sold both to contract guard
+companies (who run the work and are judged at renewal) and to the
+organisations that hire them (districts, hospitals, hotels, campuses,
+property managers, who need oversight across vendors they do not employ).
+Those are different jobs, so they are separate plan lines with separate
+meters, not one product with a discount.
+
+**A building can appear on both sides, and the pricing page says so.** A hotel
+on the client line and the firm guarding it on the operator line both pay.
+Hiding that until the first sales call would be worse than stating it.
+
+**In-house security teams are operators, not clients.** They run the work.
+
+**Billed per active site (operator) or covered property (client), never per
+guard.** Rotations turn over constantly, and a per-seat bill pays operators to
+share one login across a crew. A shared login destroys attribution, and
+attribution *is* the product, so per-guard pricing would charge for the audit
+trail while funding its corruption. A site with no shifts clocked in is not
+billed, which makes seasonal and event work honest rather than something to
+hide by deleting the site.
+
+**Inviting a vendor is free, permanently, on every plan.** It is pinned by a
+test asserting no entitlement id matches `/invite/`. A client's fourth guard
+company is a new operator using Transient nightly, so charging for it would be
+a turnstile on our own funnel as well as a bad answer to give a school
+district.
+
+**The pricing system must never be the reason the record is incomplete.** A
+lapsed subscription still clocks in, logs entries, captures incidents,
+generates a report and sends it. Billing restricts *pulling history out*,
+loudly. "Their card expired" is not a defensible answer to why February is
+missing from a claim file. Enforced in code: `hasEntitlement(null, x)` is
+always `false`, and nothing in `ALWAYS_INCLUDED` is reachable through it, so a
+caller cannot accidentally gate recording behind a plan check.
+
+**No backdoor between the lines**, pinned by a test: client plans never carry
+`white_label` or `custom_templates`; operator plans never carry
+`compliance_dashboard` or `cross_vendor_search`. The cheap client plan must not
+become a way to buy the operator product.
+
+**Operator prices are anchored to a public comparable; client prices are
+not.** Officer Reports publishes per-site pricing at roughly $40/site/month
+mobile and $60-70/site/month static with unlimited officers, which is what the
+operator ladder ($39/$79/$149) is set against. No competitor publishes
+client-side oversight pricing at all, so $149 (Oversight) and $129 (Portfolio,
+deliberately cheaper per unit so volume actually pays) are **a judgement call
+with no market benchmark behind them**. Treat them as a starting hypothesis to
+test against real buyers, not a researched number.
+
+**Marketing copy reads its prices from `src/lib/billing/plans.ts`.** The
+landing page calls `startingPrice(audience)` rather than repeating a figure,
+because a page quoting a number the app has stopped charging is the usual way
+this drifts.
+
+**30-day trial, no card.** The category norm is 14 days. Thirty is chosen so a
+trial spans a full monthly reporting cycle with a real client, which is the
+only way this product demonstrates the thing it is for.
+
+**Retention floor of 12 months on every paid plan**, including the cheapest.
+Below a year, the evidence stops covering the window claims actually arrive
+in, which would make the cheap tier actively misleading.

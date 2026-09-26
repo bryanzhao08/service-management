@@ -38,18 +38,38 @@ function check(name, condition, detail = "") {
   }
 }
 
-/** Section 7's nine sections, in the order the spec lists them. */
+/**
+ * Section 7's nine sections, in the order the spec lists them.
+ *
+ * Identified by DOM id or landmark, never by marketing copy. An earlier
+ * version pinned an exact phrase per section ("Log the shift", "4 AM
+ * problem"), which made every wording change look like a structural
+ * regression and, worse, passed happily on a section whose heading rendered
+ * over an empty body. Checking the element and its text volume catches the
+ * failure that actually matters.
+ */
 const SECTIONS = [
-  ["hero", "Log the shift"],
-  ["problem", "4 AM problem"],
-  ["how", "How it works"],
-  ["features", "What it does"],
-  ["sites", "sites actually differ"],
-  ["operations", "For operations teams"],
-  ["security", "Security & privacy"],
-  ["contact", "per-site pricing"],
-  ["footer", "all systems normal"],
+  ["hero", "main > section:first-of-type"],
+  ["problem", "#problem"],
+  ["audiences", "#audiences"],
+  ["how", "#how"],
+  ["features", "#features"],
+  ["sites", "#sites"],
+  ["operations", "#operations"],
+  ["security", "#security"],
+  ["contact", "#contact"],
+  ["footer", "footer"],
 ];
+
+/**
+ * A section with less rendered text than this is a broken section.
+ *
+ * The footer is legitimately a nav strip -- four links and a status line --
+ * so it gets its own floor rather than dragging the content floor down to
+ * something that would wave an empty feature grid through.
+ */
+const MIN_SECTION_TEXT = 80;
+const MIN_FOOTER_TEXT = 40;
 
 /** The contact form, scoped so a field lookup cannot escape into the page. */
 function contactForm(page) {
@@ -109,19 +129,30 @@ async function main() {
   );
 
   // --- sections present, in order ------------------------------------------
-  const bodyText = await page.locator("body").innerText();
-  let lastIndex = -1;
+  let lastTop = -1;
   let inOrder = true;
-  for (const [id, needle] of SECTIONS) {
-    const index = bodyText.indexOf(needle);
+  for (const [id, selector] of SECTIONS) {
+    const node = page.locator(selector).first();
+    const count = await node.count();
+    check(`section "${id}" present`, count > 0, count === 0 ? selector : "");
+    if (count === 0) continue;
+
+    // Substance, not phrasing. A heading over an empty body is the regression
+    // the old string match could not see.
+    const text = (await node.innerText()).trim();
+    const floor = id === "footer" ? MIN_FOOTER_TEXT : MIN_SECTION_TEXT;
     check(
-      `section "${id}" present`,
-      index !== -1,
-      index === -1 ? `missing "${needle}"` : "",
+      `section "${id}" has rendered content`,
+      text.length >= floor,
+      `${text.length} chars, floor ${floor}`,
     );
-    if (index !== -1) {
-      if (index < lastIndex) inOrder = false;
-      lastIndex = index;
+
+    // Vertical position is the honest test of document order and survives any
+    // rewrite of the copy inside it.
+    const box = await node.boundingBox();
+    if (box) {
+      if (box.y < lastTop) inOrder = false;
+      lastTop = box.y;
     }
   }
   check("sections appear in the order section 7 specifies", inOrder);
@@ -171,6 +202,28 @@ async function main() {
     // 200 is fine. A 307 to /sign-in means the proxy gated it, which for a
     // public marketing link is a defect, so it is NOT accepted here.
     check(`link ${href} resolves`, res.status() === 200, `status ${res.status()}`);
+  }
+
+  // --- cross-page fragments point at a real element -------------------------
+  // A link to /pricing#for-guard-companies returns 200 whether or not that id
+  // exists, so the status check above cannot see a dead anchor. Renaming a
+  // section id on the pricing page would silently drop every visitor at the
+  // top of the page instead of at their half of it.
+  const fragments = hrefs.filter(
+    (h) => h.startsWith("/") && h.includes("#") && !h.startsWith("/#"),
+  );
+  check(
+    "landing page deep-links into another page",
+    fragments.length > 0,
+    `${fragments.length} unique`,
+  );
+  for (const href of fragments) {
+    const [path, id] = href.split("#");
+    const probe = await browser.newPage();
+    await probe.goto(new URL(path, BASE).toString(), { waitUntil: "domcontentloaded" });
+    const found = await probe.locator(`#${id}`).count();
+    await probe.close();
+    check(`fragment ${href} targets a real element`, found === 1, `count ${found}`);
   }
 
   // --- manifest and icons ---------------------------------------------------

@@ -16,7 +16,7 @@ export const dynamic = "force-static";
  */
 export default function TermsPage() {
   return (
-    <LegalPage title="Terms" updated="September 2026">
+    <LegalPage title="Terms" updated="September 2026" self="/terms">
       <LegalSection title="What this page is">
         <p>
           The terms of using Transient. It has not been reviewed by a lawyer and is not
