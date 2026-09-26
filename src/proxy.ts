@@ -37,7 +37,21 @@ export default auth((req) => {
     // authenticates the *payload* with a Svix signature instead, which is a
     // stronger check than a cookie would be: it proves the body was not
     // altered, not merely that someone was logged in.
-    pathname.startsWith("/api/webhooks/");
+    pathname.startsWith("/api/webhooks/") ||
+    // Signed links. These carry their own credential in the URL and verify it
+    // themselves, so a session check here would not add security — it would
+    // remove the feature. Every one of them exists for somebody with no
+    // account: the property manager opening the receipt we emailed them
+    // (`/r`), the same manager looking at the photos (`/g`), and the image
+    // requests that gallery makes (`/api/uploads/local`, which is this app's
+    // stand-in for an S3 presigned URL and authorises off the signature).
+    //
+    // Gating them was a real bug, not a theoretical one: every report already
+    // sent carries a `/g/<token>` link in its footer and a QR code pointing at
+    // it, and both landed on a sign-in page.
+    pathname.startsWith("/r/") ||
+    pathname.startsWith("/g/") ||
+    pathname === "/api/uploads/local";
 
   if (!req.auth && !isPublic) {
     // An API caller gets a status, not a login page. A 307 to HTML on a fetch

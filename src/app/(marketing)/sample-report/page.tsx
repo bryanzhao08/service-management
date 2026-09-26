@@ -234,9 +234,21 @@ export default function SampleReportPage() {
           </section>
         </article>
 
-        <div className="mt-10">
+        {/* Both buyers read this page, and they buy different things. A guard
+            company is looking at what they would send; the organisation that
+            hires them is looking at what they would receive. One CTA saying
+            "your sites" presumed the reader owns the property, which is the
+            wrong half of the market -- the operator is the one being judged at
+            renewal. So the split is explicit, and each side lands on its own
+            half of the pricing page rather than a generic contact anchor. */}
+        <div className="mt-10 flex flex-col gap-3 sm:flex-row">
           <Button asChild size="lg">
-            <Link href="/#contact">Get pricing for your sites</Link>
+            <Link href="/pricing#for-guard-companies">I run a guard company</Link>
+          </Button>
+          <Button asChild size="lg" variant="secondary">
+            <Link href="/pricing#for-the-people-who-hire-them">
+              I hire guard companies
+            </Link>
           </Button>
         </div>
       </main>

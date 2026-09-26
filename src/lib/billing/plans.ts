@@ -140,6 +140,47 @@ export type Entitlement =
   | "delivery_attestation";
 
 /**
+ * Human labels for the comparison table.
+ *
+ * `Record<Entitlement, string>` is exhaustive on purpose: adding a capability
+ * to `Entitlement` without naming it here fails the typecheck rather than
+ * rendering a blank row on the pricing table, which is the kind of defect that
+ * survives review because nobody reads a table of ticks.
+ */
+export const ENTITLEMENT_LABELS: Record<Entitlement, string> = {
+  client_portal: "Read-only logins for your clients",
+  custom_templates: "Custom report sections per site",
+  push_alerts: "Push alerts on high-severity incidents",
+  white_label: "White-label: your brand, not ours",
+  vendor_roster: "Vendor roster, by site",
+  report_schedule: "Required report schedule per site",
+  compliance_dashboard: "Vendor compliance dashboard",
+  missing_report_alerts: "Alerts when a report never arrives",
+  cross_vendor_search: "Incident search across every vendor",
+  procurement_export: "Coverage export for contract review",
+  sso: "SSO through SAML or OIDC",
+  api_access: "Read API",
+  audit_export: "Bulk audit-log export",
+  delivery_attestation: "Quarterly signed delivery attestation",
+};
+
+/**
+ * The plan each line leads with.
+ *
+ * Deliberately *not* labelled "most popular". Nobody has bought anything yet,
+ * so a popularity claim would be a fabricated social proof on the one page a
+ * buyer is most likely to check us on. A recommendation is ours to make and
+ * true by construction, so the badge says that instead.
+ *
+ * Typed as `PlanId`, so deleting or renaming a plan breaks the build rather
+ * than silently un-highlighting the line.
+ */
+export const RECOMMENDED: Record<Audience, PlanId> = {
+  operator: "operations",
+  client: "portfolio",
+};
+
+/**
  * Never gated, on any plan, in either line, including a lapsed one.
  *
  * Not decoration: a test asserts every one of these stays reachable while

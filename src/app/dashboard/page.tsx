@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { can, requireUnlockedActor } from "@/lib/auth/guards";
 import { db, type Actor } from "@/lib/db/scoped";
+import { averageEndFlowMs } from "@/lib/db/shift-end";
 import { formatClock, formatElapsed } from "@/lib/time";
+import { formatDuration } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -46,10 +48,11 @@ export default async function DashboardPage() {
 
 async function GuardView({ actor }: { actor: Actor }) {
   const scoped = db(actor);
-  const [active, startable, recent] = await Promise.all([
+  const [active, startable, recent, pace] = await Promise.all([
     scoped.shift.findActiveForActor(),
     scoped.shift.findStartableForActor(),
     scoped.shift.recentReportsForActor(3),
+    averageEndFlowMs(actor.userId, startOfMonth()),
   ]);
 
   // An active shift is the only thing that matters while it is running, so it
@@ -136,7 +139,45 @@ async function GuardView({ actor }: { actor: Actor }) {
       ) : null}
 
       <RecentReports reports={recent} />
+      <EndOfShiftPace pace={pace} />
     </div>
+  );
+}
+
+/** Midnight on the 1st, in the viewer's own clock. */
+function startOfMonth(now = new Date()): Date {
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+}
+
+/**
+ * The quiet stat from section 9.2.
+ *
+ * Deliberately the guard's own number and nothing else: no target, no
+ * comparison, no colour. A number that ranks guards against each other turns
+ * "write down what happened" into "get off the clock", and the report stops
+ * being evidence. It exists so a guard can see the thing the product promised
+ * them actually happened.
+ */
+function EndOfShiftPace({
+  pace,
+}: {
+  pace: { averageMs: number; shifts: number } | null;
+}) {
+  if (!pace) return null;
+  return (
+    <Card>
+      <CardContent className="flex items-baseline justify-between gap-4 py-4">
+        <div className="min-w-0">
+          <p className="text-sm text-text-muted">Your end-of-shift time this month</p>
+          <p className="text-xs text-text-muted">
+            Across {pace.shifts} {pace.shifts === 1 ? "shift" : "shifts"}
+          </p>
+        </div>
+        <p className="text-xl font-semibold text-text tabular-nums">
+          {formatDuration(pace.averageMs)}
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 

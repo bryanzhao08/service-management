@@ -9,6 +9,7 @@ import {
   Lock,
   Mail,
   MapPin,
+  Minus,
   Mic,
   Receipt,
   ScrollText,
@@ -17,11 +18,12 @@ import {
 } from "lucide-react";
 
 import { DashboardMock } from "@/components/marketing/dashboard-mock";
+import { PLAN_LINES, PlanLine } from "@/components/marketing/pricing-plans";
 import { SiteConfigMock } from "@/components/marketing/site-config-mock";
 import { TimelineMock } from "@/components/marketing/timeline-mock";
 import { Logo } from "@/components/brand";
 import { SiteFooter } from "@/components/marketing/site-footer";
-import { startingPrice } from "@/lib/billing/plans";
+import { ALWAYS_INCLUDED, startingPrice } from "@/lib/billing/plans";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ContactForm } from "./contact-form";
@@ -74,14 +76,14 @@ const AUDIENCES = [
     who: "You employ the officers and you are the one being judged at renewal.",
     body: "Your people already do the work. What is missing is the part where a client can see it without you emailing them a reassurance. Priced per active site, so covering a shift never costs you more than not covering it.",
     cta: "See guard company pricing",
-    href: "/pricing#for-guard-companies",
+    href: "#for-guard-companies",
   },
   {
     title: "The organisations that hire them",
     who: "School districts, hospitals, hotels, campuses, property managers.",
     body: "You are paying three vendors and getting three formats, on three schedules, when they remember. Set the standard once, have every vendor report into it, and keep the record when the contract ends. Inviting a vendor is always free.",
     cta: "See oversight pricing",
-    href: "/pricing#for-the-people-who-hire-them",
+    href: "#for-the-people-who-hire-them",
   },
 ] as const;
 
@@ -203,7 +205,7 @@ export default function HomePage() {
           <Logo />
           <div className="flex items-center gap-1">
             <Button asChild variant="ghost">
-              <Link href="/pricing">Pricing</Link>
+              <Link href="#pricing">Pricing</Link>
             </Button>
             <Button asChild variant="ghost">
               <Link href="/sign-in">Sign in</Link>
@@ -369,11 +371,50 @@ export default function HomePage() {
           </ul>
         </Section>
 
-        {/* --- 8. Pricing + contact --------------------------------------- */}
+        {/* --- 8. Pricing -------------------------------------------------- */}
+        <Section
+          id="pricing"
+          title="Priced per site, not per guard"
+          lead="Two products, because the company guarding a building and the organisation that hired them are buying different things. No free tier: this is a legal record, and a plan that quietly stops holding one is worse than no plan. Thirty days free instead, no card."
+        >
+          <div className="flex flex-col gap-16">
+            {PLAN_LINES.map((line) => (
+              <PlanLine key={line.id} line={line} headingLevel="h3" />
+            ))}
+          </div>
+          <div className="flex flex-col gap-4 border-t border-border pt-8">
+            <h3 className="text-lg font-medium">What no plan will ever withhold</h3>
+            <p className="max-w-3xl text-text-muted">
+              If a card expires on the night a building floods, the flood still gets
+              logged, the photos still upload, the report still generates and it still
+              sends. We chase the bill in the app, loudly. Billing status is never part
+              of a legal record.
+            </p>
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {ALWAYS_INCLUDED.map((line) => (
+                <li key={line} className="flex gap-2 text-sm text-text-muted">
+                  <Minus
+                    className="mt-0.5 size-4 shrink-0 text-primary"
+                    aria-hidden="true"
+                  />
+                  <span>{line}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="pt-2 text-sm">
+              <Link href="/pricing" className="underline underline-offset-4">
+                The longer version: why both sides pay, and what happens to your data if
+                you leave
+              </Link>
+            </p>
+          </div>
+        </Section>
+
+        {/* --- 9. Contact -------------------------------------------------- */}
         <Section
           id="contact"
-          title={`From $${OPERATOR_FROM.price} a ${OPERATOR_FROM.unit}, or $${CLIENT_FROM.price} a ${CLIENT_FROM.unit}`}
-          lead="Guard companies pay per active site they cover. The organisations hiring them pay per property they oversee, and never pay to add another vendor. No per-guard charge on either side, because covering an extra shift should not raise a bill."
+          title="Tell us what you cover"
+          lead="Whichever side you are on, the fastest answer comes from telling us the shape of the work: how many sites, how many vendors, what your clients ask for at renewal. No deck, no discovery call before a straight answer on price."
         >
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
             <ul className="flex flex-col gap-3 text-sm text-text-muted">

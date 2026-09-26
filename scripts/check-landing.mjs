@@ -57,6 +57,7 @@ const SECTIONS = [
   ["sites", "#sites"],
   ["operations", "#operations"],
   ["security", "#security"],
+  ["pricing", "#pricing"],
   ["contact", "#contact"],
   ["footer", "footer"],
 ];
@@ -204,25 +205,37 @@ async function main() {
     check(`link ${href} resolves`, res.status() === 200, `status ${res.status()}`);
   }
 
-  // --- cross-page fragments point at a real element -------------------------
+  // --- every fragment link points at a real element -------------------------
   // A link to /pricing#for-guard-companies returns 200 whether or not that id
   // exists, so the status check above cannot see a dead anchor. Renaming a
-  // section id on the pricing page would silently drop every visitor at the
-  // top of the page instead of at their half of it.
-  const fragments = hrefs.filter(
-    (h) => h.startsWith("/") && h.includes("#") && !h.startsWith("/#"),
-  );
+  // section id would silently drop every visitor at the top of the page
+  // instead of at their half of it.
+  //
+  // Same-page fragments are checked the same way and for the same reason. They
+  // were briefly exempt, because the filter here only matched hrefs starting
+  // with "/" while the nav and the audience cards had just been repointed at
+  // bare "#pricing" style targets. That combination is the worst case: the
+  // links most likely to be clicked were the only ones nothing verified.
+  const fragments = hrefs.filter((h) => h.includes("#") && !h.endsWith("#"));
   check(
-    "landing page deep-links into another page",
+    "landing page has fragment links to check",
     fragments.length > 0,
     `${fragments.length} unique`,
   );
   for (const href of fragments) {
     const [path, id] = href.split("#");
-    const probe = await browser.newPage();
-    await probe.goto(new URL(path, BASE).toString(), { waitUntil: "domcontentloaded" });
-    const found = await probe.locator(`#${id}`).count();
-    await probe.close();
+    const samePage = path === "" || path === "/";
+    let found;
+    if (samePage) {
+      found = await page.locator(`#${id}`).count();
+    } else {
+      const probe = await browser.newPage();
+      await probe.goto(new URL(path, BASE).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      found = await probe.locator(`#${id}`).count();
+      await probe.close();
+    }
     check(`fragment ${href} targets a real element`, found === 1, `count ${found}`);
   }
 

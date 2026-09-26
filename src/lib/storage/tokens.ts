@@ -28,6 +28,23 @@ export type UploadToken = {
 
 export type DownloadToken = {
   key: string;
+  /** Unix seconds. */
+  exp: number;
+};
+
+/**
+ * The receipt link from section 9.5: a manager with no account opens it and
+ * sees who the report went to and what happened to it.
+ *
+ * It lives in this module rather than in its own because the HMAC machinery
+ * below is the part that has to be right, and a second copy is how one of them
+ * ends up without the constant-time compare. What differs is only the claim
+ * shape, so only the claim shape is separate.
+ */
+export type ReceiptToken = {
+  reportId: string;
+  /** Unix seconds. Milliseconds here would read as the year 58000, i.e. a
+   *  bearer link that never expires. */
   exp: number;
 };
 
@@ -47,12 +64,14 @@ function sign(payload: string): string {
   return createHmac("sha256", secret()).update(payload).digest("base64url");
 }
 
-function encode(claims: UploadToken | DownloadToken): string {
+type AnyToken = UploadToken | DownloadToken | ReceiptToken;
+
+function encode(claims: AnyToken): string {
   const payload = Buffer.from(JSON.stringify(claims), "utf8").toString("base64url");
   return `${VERSION}.${payload}.${sign(`${VERSION}.${payload}`)}`;
 }
 
-function decode<T extends UploadToken | DownloadToken>(token: string): T | null {
+function decode<T extends AnyToken>(token: string): T | null {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [version, payload, signature] = parts as [string, string, string];
@@ -103,4 +122,32 @@ export function verifyDownloadToken(token: string): DownloadToken | null {
   const claims = decode<DownloadToken>(token);
   if (!claims) return null;
   return typeof claims.key === "string" ? claims : null;
+}
+
+/** How long a shared receipt link stays live (section 9.5). */
+export const RECEIPT_TTL_SECONDS = 90 * 24 * 60 * 60;
+
+/**
+ * Builds the claims for a receipt link.
+ *
+ * Separate from the server action that mints it so the expiry arithmetic is
+ * reachable from a test. `exp` is the one field in this module with a unit
+ * that the type cannot carry, and getting it wrong does not fail -- it
+ * produces a bearer link that outlives the company.
+ */
+export function receiptClaims(reportId: string, now = new Date()): ReceiptToken {
+  return {
+    reportId,
+    exp: Math.floor(now.getTime() / 1000) + RECEIPT_TTL_SECONDS,
+  };
+}
+
+export function signReceiptToken(claims: ReceiptToken): string {
+  return encode(claims);
+}
+
+export function verifyReceiptToken(token: string): ReceiptToken | null {
+  const claims = decode<ReceiptToken>(token);
+  if (!claims) return null;
+  return typeof claims.reportId === "string" ? claims : null;
 }

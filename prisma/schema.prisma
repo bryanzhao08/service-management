@@ -633,7 +633,13 @@ model ReportDelivery {
   /// nothing to skip on and a second attempt silently creates a second set.
   /// Postgres treats NULLs as distinct, so this constrains the create path
   /// (which always has a recipient) and not rows orphaned by a later delete.
+  /// One row per recipient, so a queue retry cannot double a delivery.
   @@unique([reportId, recipientId])
+  /// And one row per *address*, which the line above cannot enforce: a one-off
+  /// CC has a null recipientId, and Postgres treats every NULL as distinct, so
+  /// without this a retried CC send is two emails to the same person with two
+  /// contradictory delivery states.
+  @@unique([reportId, email])
   @@index([reportId])
   @@index([recipientId])
   @@index([providerMessageId])

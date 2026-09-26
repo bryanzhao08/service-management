@@ -1,18 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Check, Minus } from "lucide-react";
+import { Minus } from "lucide-react";
 
 import { Logo } from "@/components/brand";
+import { PLAN_LINES, PlanLine } from "@/components/marketing/pricing-plans";
 import { SiteFooter } from "@/components/marketing/site-footer";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  ALWAYS_INCLUDED,
-  type Audience,
-  type Plan,
-  TRIAL_DAYS,
-  plansFor,
-} from "@/lib/billing/plans";
+import { ALWAYS_INCLUDED } from "@/lib/billing/plans";
 
 export const metadata: Metadata = {
   title: "Pricing — Transient",
@@ -32,83 +26,6 @@ export const dynamic = "force-static";
  * wanting to know what *their* side costs. Every number comes from `PLANS`, so
  * this page cannot drift from what the app actually enforces.
  */
-
-const LINES: {
-  audience: Audience;
-  id: string;
-  heading: string;
-  who: string;
-  lead: string;
-  meter: string;
-}[] = [
-  {
-    audience: "operator",
-    id: "for-guard-companies",
-    heading: "For guard companies",
-    who: "You employ the officers and you are being judged at renewal.",
-    lead: "Charging per guard would mean charging you more every time you cover a shift, which is a good way to end up with one login shared across a crew. A shared login wrecks attribution, and attribution is what your client is actually buying. So we bill the site.",
-    meter:
-      "A site counts for a month if at least one shift was clocked in on it. Seasonal work and event sites cost nothing in the months they sit dark.",
-  },
-  {
-    audience: "client",
-    id: "for-the-people-who-hire-them",
-    heading: "For the organisations that hire them",
-    who: "School districts, hospitals, hotels, campuses, property managers.",
-    lead: "You are not running the guards. You are trying to find out whether three different vendors are actually doing what their contracts say, without chasing PDFs through an inbox. You set the standard, every vendor reports into it, and the delivery record is yours rather than theirs.",
-    meter:
-      "Priced per property you cover. Never per vendor — adding your fourth guard company is the behaviour we want, so it is free, permanently.",
-  },
-];
-
-function PlanCard({ plan }: { plan: Plan }) {
-  const quoteOnly = plan.pricePerUnitMonth === null;
-  return (
-    <Card className="flex h-full flex-col">
-      <CardHeader className="gap-2">
-        <CardTitle>{plan.name}</CardTitle>
-        <p className="flex items-baseline gap-1">
-          {quoteOnly ? (
-            <span className="text-2xl font-semibold">Let&rsquo;s talk</span>
-          ) : (
-            <>
-              <span className="text-3xl font-semibold tabular-nums">
-                ${plan.pricePerUnitMonth}
-              </span>
-              <span className="text-sm text-text-muted">/ {plan.unit} / month</span>
-            </>
-          )}
-        </p>
-        <p className="text-sm text-text-muted">
-          {plan.minUnits === 1
-            ? `From one ${plan.unit}`
-            : `${plan.minUnits} ${plan.unit} minimum`}
-        </p>
-      </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-4">
-        <p className="text-sm text-text-muted">{plan.fit}</p>
-        <ul className="flex flex-col gap-2">
-          {plan.includes.map((line) => (
-            <li key={line} className="flex gap-2 text-sm">
-              <Check
-                className="mt-0.5 size-4 shrink-0 text-primary"
-                aria-hidden="true"
-              />
-              <span>{line}</span>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-auto pt-2">
-          <Button asChild className="w-full">
-            <Link href={quoteOnly ? "/#contact" : "/sign-in"}>
-              {quoteOnly ? "Talk to us" : `Start ${TRIAL_DAYS} days free`}
-            </Link>
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function PricingPage() {
   return (
@@ -133,7 +50,7 @@ export default function PricingPage() {
             one product with a discount.
           </p>
           <nav aria-label="Jump to a plan line" className="flex flex-wrap gap-3">
-            {LINES.map((line) => (
+            {PLAN_LINES.map((line) => (
               <Button key={line.id} asChild variant="secondary">
                 <Link href={`#${line.id}`}>{line.heading}</Link>
               </Button>
@@ -141,44 +58,14 @@ export default function PricingPage() {
           </nav>
         </section>
 
-        {LINES.map((line) => {
-          const plans = plansFor(line.audience);
-          return (
-            <section
-              key={line.id}
-              id={line.id}
-              aria-labelledby={`${line.id}-heading`}
-              className="flex scroll-mt-6 flex-col gap-6 border-t border-border pt-12 pb-16"
-            >
-              <div className="flex flex-col gap-3">
-                <h2
-                  id={`${line.id}-heading`}
-                  className="text-3xl font-semibold tracking-tight"
-                >
-                  {line.heading}
-                </h2>
-                <p className="font-medium">{line.who}</p>
-                <p className="max-w-3xl text-pretty text-text-muted">{line.lead}</p>
-                <p className="max-w-3xl text-sm text-pretty text-text-muted">
-                  {line.meter}
-                </p>
-              </div>
-              <ul
-                className={
-                  plans.length >= 4
-                    ? "grid gap-4 md:grid-cols-2 xl:grid-cols-4"
-                    : "grid gap-4 md:grid-cols-3"
-                }
-              >
-                {plans.map((plan) => (
-                  <li key={plan.id}>
-                    <PlanCard plan={plan} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          );
-        })}
+        {PLAN_LINES.map((line) => (
+          <div
+            key={line.id}
+            className="border-t border-border pt-12 pb-16 first:border-t-0"
+          >
+            <PlanLine line={line} />
+          </div>
+        ))}
 
         <section
           aria-labelledby="overlap-heading"

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   ALWAYS_INCLUDED,
+  ENTITLEMENT_LABELS,
   EVIDENCE_FLOOR_MONTHS,
   PLANS,
+  RECOMMENDED,
   type Audience,
   type Entitlement,
   hasEntitlement,
@@ -154,6 +156,49 @@ describe("plans", () => {
     expect(hasEntitlement("portfolio", "compliance_dashboard")).toBe(true);
     expect(hasEntitlement("portfolio", "sso")).toBe(false);
     expect(hasEntitlement("institution", "sso")).toBe(true);
+  });
+
+  it("has no free tier, on either side", () => {
+    // Deliberate, and a rule rather than an observation about today's numbers.
+    // A $0 plan here would mean holding somebody's legal record for nothing,
+    // which ends exactly one way: we eventually need the money back, and the
+    // only leverage is the evidence. Charging from the first site keeps the
+    // retention promise in `ALWAYS_INCLUDED` something we can actually afford
+    // to keep. The trial is time-boxed instead, which expires without ever
+    // putting a record behind a card.
+    for (const plan of PLANS) {
+      expect(plan.pricePerUnitMonth, `${plan.id} is free`).not.toBe(0);
+      if (plan.pricePerUnitMonth !== null) {
+        expect(plan.pricePerUnitMonth, `${plan.id} price`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("names every entitlement it can render in a comparison table", () => {
+    // The table is generated from each plan's entitlements, so an unlabelled
+    // one renders a blank row: a capability a buyer is paying for, shown as
+    // nothing. `Record<Entitlement, string>` makes tsc catch it, and this
+    // catches the empty-string version tsc cannot see.
+    for (const entitlement of EVERY_ENTITLEMENT) {
+      const label = ENTITLEMENT_LABELS[entitlement];
+      expect(label, `${entitlement} has no label`).toBeTruthy();
+      expect(label.trim().length, `${entitlement} label`).toBeGreaterThan(3);
+    }
+  });
+
+  it("recommends a real, buyable plan on each side", () => {
+    // The badge is the only plan we actively point people at. Pointing it at
+    // a quote-only tier would send every small operator into a sales process
+    // they do not need, and pointing it at the wrong audience's plan would be
+    // invisible on the page while being obviously wrong to the buyer.
+    for (const audience of ["operator", "client"] as const) {
+      const plan = planById(RECOMMENDED[audience]);
+      expect(plan.audience, `${audience} recommendation`).toBe(audience);
+      expect(
+        plan.pricePerUnitMonth,
+        `${audience} recommendation is quote-only`,
+      ).not.toBe(null);
+    }
   });
 
   it("throws on an unknown plan instead of silently granting nothing", () => {

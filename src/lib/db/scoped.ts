@@ -304,6 +304,17 @@ export function db(actor: Actor) {
           where: { id, ...visible.report(actor) },
         });
       },
+      /**
+       * Newest version first. A shift can have several: re-generating after a
+       * supervisor asks for a correction makes a new version rather than
+       * overwriting, so the receipt can show every one that ever went out.
+       */
+      listForShift(shiftId: string) {
+        return prisma.report.findMany({
+          where: { shiftId, shift: visible.shift(actor) },
+          orderBy: { version: "desc" },
+        });
+      },
     },
 
     // -----------------------------------------------------------------------
