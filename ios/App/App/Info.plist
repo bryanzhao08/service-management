@@ -35,8 +35,15 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Take photos to document your shift and incidents.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to your Mac to test the app during local development.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Use your microphone to dictate shift notes.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

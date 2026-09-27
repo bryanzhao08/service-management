@@ -130,6 +130,60 @@ or a connected iPhone as the run destination, then press **Run**. A physical iPh
 to enable Developer Mode. TestFlight distribution requires an Apple Developer
 Program account and App Store Connect setup.
 
+### iPhone app on localhost (app screens, not the homepage)
+
+Run the local server in one terminal:
+
+```bash
+AUTH_URL=http://localhost:3001 NEXT_PUBLIC_APP_URL=http://localhost:3001 pnpm dev --port 3001 --hostname 0.0.0.0
+```
+
+In a second terminal, prepare the iPhone simulator project:
+
+```bash
+pnpm mobile:ios:local
+pnpm mobile:ios
+```
+
+Choose an iPhone simulator in Xcode and press Run. The installed **Transient**
+app opens `/dev/app` with the app dashboard, tabs, settings, and timeline using
+sample data. No database is needed for this preview; sample records cannot be
+saved. Full Xcode is required, not just Command Line Tools.
+
+For a physical iPhone, connect it and your Mac to the same Wi-Fi, replace
+`localhost` with your Mac's LAN IP in the server command above, then run:
+
+```bash
+MOBILE_APP_URL=http://192.168.1.25:3001 pnpm mobile:ios:local
+pnpm mobile:ios
+```
+
+Replace that example IP with your Mac's address. On a physical iPhone,
+`localhost` means the phone itself. Allow local network access when prompted.
+For real authenticated app data, complete the database setup and use
+`MOBILE_APP_PREVIEW=0 pnpm mobile:ios:local` to open `/dashboard` instead.
+Keep the Mac's server running while testing. This is a Capacitor app using the
+shared app UI, not a separate SwiftUI implementation or a standalone offline bundle.
+
+### Push the app source to GitHub
+
+The app is part of this repository: `ios/` contains the iPhone project,
+`android/` contains the Android project, and `src/` contains their shared UI and
+backend. Push all three together so another developer can build the app:
+
+```bash
+git status
+git add README.md package.json pnpm-lock.yaml capacitor.config.ts scripts/ src/ ios/ android/ tests/ docs/ public/ mobile/www/
+git commit -m "Update mobile app"
+git push origin main
+```
+
+GitHub stores the app's source; it does not install an app on an iPhone.
+After cloning, run `pnpm install` and the local iPhone commands above.
+Signing credentials, `.env` files, generated builds, and local Capacitor server
+configuration are excluded from Git. Distribute an installable iPhone build
+through Xcode or TestFlight.
+
 ### Sign in and check the backend
 
 Set `MOBILE_EMAIL_LINKS=1` on the backend to add an **Open in the iPhone / Android

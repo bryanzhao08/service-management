@@ -4,7 +4,11 @@ import { mobileServer } from "./scripts/mobile-config";
 
 // Hosted Next.js needs its server runtime. These are device-testing builds;
 // server.url is Capacitor's live-reload mode, not a store release architecture.
-const server = mobileServer(process.env.MOBILE_APP_URL, process.env.MOBILE_ALLOW_HTTP);
+const server = mobileServer(
+  process.env.MOBILE_APP_URL,
+  process.env.MOBILE_ALLOW_HTTP,
+  process.env.MOBILE_APP_PREVIEW,
+);
 
 const config: CapacitorConfig = {
   appId: "com.transientapp.guard",

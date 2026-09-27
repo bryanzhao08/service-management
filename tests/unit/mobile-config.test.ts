@@ -23,6 +23,15 @@ describe("native test server boundary", () => {
     expect(() => mobileServer("http://192.168.1.2:3000")).toThrow();
     expect(mobileServer("http://192.168.1.2:3000", "1")?.cleartext).toBe(true);
   });
+  it("opens the app preview only when explicitly selected for local testing", () => {
+    expect(mobileServer("http://localhost:3001", "1", "1")?.url).toBe(
+      "http://localhost:3001/dev/app",
+    );
+    expect(mobileServer("http://localhost:3001", "1")?.url).toBe(
+      "http://localhost:3001/dashboard",
+    );
+    expect(() => mobileServer("https://example.com", undefined, "1")).toThrow();
+  });
   it.each([
     "javascript:alert(1)",
     "file:///etc/passwd",

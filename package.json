@@ -41,7 +41,8 @@
     "mobile:ios": "cap open ios",
     "mobile:android": "cap open android",
     "mobile:apk": "pnpm mobile:sync && cd android && ./gradlew assembleDebug",
-    "mobile:icons": "node --import tsx scripts/gen-icons.ts && capacitor-assets generate --assetPath mobile/assets --ios --android && node scripts/finish-mobile-icons.mjs"
+    "mobile:icons": "node --import tsx scripts/gen-icons.ts && capacitor-assets generate --assetPath mobile/assets --ios --android && node scripts/finish-mobile-icons.mjs",
+    "mobile:ios:local": "node --import tsx scripts/mobile-ios-local.ts"
   },
   "dependencies": {
     "@auth/core": "0.41.3",

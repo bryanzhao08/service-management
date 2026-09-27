@@ -1,4 +1,4 @@
-export function mobileServer(raw?: string, allowHttp?: string) {
+export function mobileServer(raw?: string, allowHttp?: string, preview?: string) {
   if (!raw) return undefined;
   const url = new URL(raw);
   if (url.username || url.password || url.search || url.hash || url.pathname !== "/") {
@@ -12,8 +12,11 @@ export function mobileServer(raw?: string, allowHttp?: string) {
       "Use HTTPS, or explicitly set MOBILE_ALLOW_HTTP=1 for local testing.",
     );
   }
+  if (preview === "1" && !cleartext) {
+    throw new Error("App preview requires explicit HTTP local testing mode.");
+  }
   return {
-    url: `${url.origin}/dashboard`,
+    url: `${url.origin}${preview === "1" ? "/dev/app" : "/dashboard"}`,
     cleartext,
     errorPath: "offline.html",
     // Without this, the offline page's retry is a cross-origin navigation and
