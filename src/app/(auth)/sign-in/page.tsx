@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PIN_SIGN_IN_ENABLED } from "@/lib/auth/pin-sign-in";
 import { PinSignInForm, SignInForm } from "./sign-in-form";
 
@@ -19,8 +20,8 @@ export default async function SignInPage({
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold text-text">Sign in</h1>
         <p className="text-sm text-text-muted">
-          Transient accounts are created by your supervisor. If you do not have one yet,
-          ask them to add you.
+          Guards, your supervisor adds you. If you are not on the team yet, ask
+          them for an invite.
         </p>
       </div>
 
@@ -36,6 +37,14 @@ export default async function SignInPage({
       ) : null}
 
       {PIN_SIGN_IN_ENABLED ? <PinSignInForm from={from} /> : <SignInForm from={from} />}
+
+      <p className="text-sm text-text-muted">
+        Setting up your own company?{" "}
+        <Link href="/sign-up" className="underline underline-offset-4">
+          Start a trial
+        </Link>
+        .
+      </p>
     </div>
   );
 }

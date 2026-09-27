@@ -102,7 +102,9 @@ export function PlanCard({ plan }: { plan: Plan }) {
             variant={recommended ? "primary" : "secondary"}
             className="w-full"
           >
-            <Link href={quoteOnly ? "/#contact" : "/sign-in"}>
+            <Link
+              href={quoteOnly ? "/#contact" : `/sign-up?plan=${plan.id}`}
+            >
               {quoteOnly ? "Talk to us" : `Start ${TRIAL_DAYS} days free`}
             </Link>
           </Button>

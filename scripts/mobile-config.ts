@@ -16,5 +16,8 @@ export function mobileServer(raw?: string, allowHttp?: string) {
     url: `${url.origin}/dashboard`,
     cleartext,
     errorPath: "offline.html",
+    // Without this, the offline page's retry is a cross-origin navigation and
+    // Capacitor hands the app's own backend to the system browser.
+    allowNavigation: [url.hostname],
   };
 }

@@ -23,7 +23,7 @@ import { SiteConfigMock } from "@/components/marketing/site-config-mock";
 import { TimelineMock } from "@/components/marketing/timeline-mock";
 import { Logo } from "@/components/brand";
 import { SiteFooter } from "@/components/marketing/site-footer";
-import { ALWAYS_INCLUDED, startingPrice } from "@/lib/billing/plans";
+import { ALWAYS_INCLUDED, startingPrice, TRIAL_DAYS } from "@/lib/billing/plans";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ContactForm } from "./contact-form";
@@ -233,7 +233,7 @@ export default function HomePage() {
               </p>
               <div className="flex flex-wrap gap-3">
                 <Button asChild size="lg">
-                  <Link href="/sign-in">Start 30 days free</Link>
+                  <Link href="/sign-up">Start {TRIAL_DAYS} days free</Link>
                 </Button>
                 <Button asChild size="lg" variant="secondary">
                   <Link href="/sample-report" target="_blank" rel="noopener">

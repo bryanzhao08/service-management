@@ -31,7 +31,9 @@ describe("native magic links", () => {
       expiresInMinutes: 10,
       nativeUrl,
     });
-    expect(email.html).toContain(`href="${callback}"`);
+    // The href is HTML-escaped, so the `&` separator arrives as `&amp;`.
+    // nativeUrl needs no escaping because nativeSignInLink percent-encodes it.
+    expect(email.html).toContain(`href="${callback.replace(/&/g, "&amp;")}"`);
     expect(email.html).toContain(`href="${nativeUrl}"`);
     expect(email.text).toContain(nativeUrl);
   });

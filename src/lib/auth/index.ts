@@ -10,6 +10,7 @@ import { record as recordAudit } from "@/lib/db/audit";
 import { authConfig, MAGIC_LINK_MAX_AGE_SECONDS } from "./config";
 import { deliverMagicLink } from "./magic-link";
 import { authorizePinSignIn, PIN_SIGN_IN_ENABLED } from "./pin-sign-in";
+import { authorizeSignUp } from "./sign-up-provider";
 
 /**
  * Node-only. Adds the adapter and the magic-link provider to the edge-safe
@@ -58,10 +59,30 @@ const pinCredentials: Provider = Credentials({
   authorize: authorizePinSignIn,
 });
 
+/**
+ * Redeeming a company sign-up link. See `sign-up-provider.ts` for why account
+ * creation happens in a provider rather than a route handler.
+ *
+ * Always registered, unlike the PIN provider. Sign-up is a product feature
+ * rather than an opt-in weakening of the sign-in path, and a link already in
+ * someone's inbox must still redeem.
+ */
+const signUpCredentials: Provider = Credentials({
+  id: "sign-up",
+  name: "Company sign-up",
+  credentials: {
+    token: { label: "Sign-up token", type: "text" },
+    plan: { label: "Plan", type: "text" },
+  },
+  authorize: authorizeSignUp,
+});
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
   adapter: createAuthAdapter(),
-  providers: PIN_SIGN_IN_ENABLED ? [magicLink, pinCredentials] : [magicLink],
+  providers: PIN_SIGN_IN_ENABLED
+    ? [magicLink, pinCredentials, signUpCredentials]
+    : [magicLink, signUpCredentials],
   callbacks: {
     ...authConfig.callbacks,
 
