@@ -86,7 +86,7 @@ export function magicLinkEmail(params: {
      </p>
      <p style="margin:0 0 24px;">
        <a href="${htmlUrl}"
-          style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
+          style="display:inline-block;background:${ACCENT};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
          Sign in
        </a>
      </p>
@@ -151,7 +151,7 @@ export function verifyRecipientEmail(params: {
      </p>
      <p style="margin:0 0 24px;">
        <a href="${htmlUrl}"
-          style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
+          style="display:inline-block;background:${ACCENT};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
          Confirm I receive these reports
        </a>
      </p>
@@ -228,7 +228,7 @@ export function teamInviteEmail(params: {
      </p>
      <p style="margin:0 0 24px;">
        <a href="${signInUrl}"
-          style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
+          style="display:inline-block;background:${ACCENT};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
          Sign in to Transient
        </a>
      </p>
@@ -296,7 +296,7 @@ export function signUpVerifyEmail(params: {
      </p>
      <p style="margin:0 0 24px;">
        <a href="${htmlUrl}"
-          style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
+          style="display:inline-block;background:${ACCENT};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
          Confirm and start ${trialDays} days free
        </a>
      </p>
