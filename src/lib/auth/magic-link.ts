@@ -1,6 +1,7 @@
 import { findSignInUserByEmail } from "@/lib/db/auth-adapter";
 import { getEmailProvider } from "@/lib/email/provider";
 import { magicLinkEmail } from "@/lib/email/templates";
+import { nativeSignInLink } from "@/lib/native/auth-link";
 import { MAGIC_LINK_MAX_AGE_SECONDS } from "./config";
 
 /**
@@ -32,6 +33,9 @@ export async function deliverMagicLink({
       magicLinkEmail({
         to: identifier,
         url,
+        ...(process.env.MOBILE_EMAIL_LINKS === "1"
+          ? { nativeUrl: nativeSignInLink(url) }
+          : {}),
         expiresInMinutes: Math.round(MAGIC_LINK_MAX_AGE_SECONDS / 60),
       }),
     );

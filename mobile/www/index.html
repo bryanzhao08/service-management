@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Transient</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+        background: #030701;
+        color: #eef6e8;
+      }
+      body {
+        min-height: 90vh;
+        display: grid;
+        place-items: center;
+        margin: 0;
+        padding: 24px;
+      }
+      main {
+        max-width: 340px;
+      }
+      .mark {
+        width: 64px;
+        height: 64px;
+        background: #76d337;
+        border-radius: 50%;
+        margin-bottom: 32px;
+      }
+      h1 {
+        font-size: 32px;
+      }
+      p {
+        line-height: 1.6;
+        color: #b5c1ac;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mark" aria-hidden="true"></div>
+      <h1>Transient</h1>
+      <p>
+        This test build needs a server address. Set MOBILE_APP_URL to your deployed
+        HTTPS origin, then run pnpm mobile:sync and rebuild the app.
+      </p>
+    </main>
+  </body>
+</html>

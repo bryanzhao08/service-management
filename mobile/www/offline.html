@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Reconnect · Transient</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+        background: #030701;
+        color: #eef6e8;
+      }
+      body {
+        min-height: 90vh;
+        display: grid;
+        place-items: center;
+        margin: 0;
+        padding: 24px;
+      }
+      main {
+        max-width: 340px;
+      }
+      p {
+        color: #b5c1ac;
+        line-height: 1.6;
+      }
+      button {
+        background: #76d337;
+        color: #030701;
+        border: 0;
+        border-radius: 12px;
+        padding: 16px 24px;
+        font: inherit;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Waiting for a connection</h1>
+      <p>
+        The server couldn’t be reached. Entries already queued on this device remain
+        stored. Reconnect to open your shift.
+      </p>
+      <button id="retry">Try again</button>
+      <script>
+        document.getElementById("retry").addEventListener("click", async () => {
+          const response = await fetch("./server.json");
+          const config = await response.json();
+          if (config.url) window.location.replace(config.url);
+        });
+      </script>
+    </main>
+  </body>
+</html>

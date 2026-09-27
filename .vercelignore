@@ -1,0 +1,7 @@
+android/
+ios/
+mobile/
+.pnpm-store/
+.data/
+test-results/
+playwright-report/

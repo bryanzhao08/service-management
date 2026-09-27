@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/.pnpm-store/
 /.pnp
 .pnp.*
 .yarn/*
@@ -62,3 +63,12 @@ next-env.d.ts
 /.claude/
 /skills-lock.json
 .neon
+
+# Native generated assets, signing materials, and build outputs.
+/mobile/www/server.json
+/mobile/assets/
+/mobile/artifacts/
+*.jks
+*.keystore
+*.mobileprovision
+*.p12
