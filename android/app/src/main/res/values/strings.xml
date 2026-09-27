@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Transient</string>
+    <string name="title_activity_main">Transient</string>
+    <string name="package_name">com.transientapp.guard</string>
+    <string name="custom_url_scheme">com.transientapp.guard</string>
+</resources>

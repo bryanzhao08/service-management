@@ -49,8 +49,9 @@ export function magicLinkEmail(params: {
   to: string;
   url: string;
   expiresInMinutes: number;
+  nativeUrl?: string;
 }): EmailMessage {
-  const { to, url, expiresInMinutes } = params;
+  const { to, url, expiresInMinutes, nativeUrl } = params;
 
   const html = shell(
     "Sign in to Transient",
@@ -64,6 +65,7 @@ export function magicLinkEmail(params: {
          Sign in
        </a>
      </p>
+     ${nativeUrl ? `<p style="margin:0 0 24px;"><a href="${nativeUrl}" style="color:${LIME};">Open in the iPhone / Android app</a></p>` : ""}
      <p style="margin:0 0 8px;font-size:13px;opacity:0.7;">
        If the button does not work, paste this into your browser:
      </p>
@@ -79,6 +81,7 @@ export function magicLinkEmail(params: {
     `This link works once and expires in ${expiresInMinutes} minutes.`,
     "",
     url,
+    ...(nativeUrl ? ["", "Open in the iPhone / Android app:", nativeUrl] : []),
     "",
     "If you did not ask to sign in, you can ignore this email.",
   ].join("\n");

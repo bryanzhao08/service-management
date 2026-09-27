@@ -6,3 +6,6 @@ docs/screenshots
 prisma/migrations
 *.md
 src/generated
+android
+ios
+mobile/assets

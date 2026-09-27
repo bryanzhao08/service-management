@@ -55,18 +55,107 @@ Two things that will waste your afternoon if nobody tells you:
   default, so without it the only way in is a magic link. On a phone, or on a
   shared device, the PIN is the far better path.
 
+## Run the iPhone or Android app
+
+The `ios/` and `android/` folders contain Capacitor 8 **device-testing apps**.
+They load the running Next.js backend; the database, uploads, email, and report
+generation still run on the server. They are not store-release builds.
+
+Install the project dependencies with `pnpm install`, then connect both native
+projects to a working HTTPS deployment:
+
+```bash
+export MOBILE_APP_URL="https://your-project.vercel.app"
+pnpm mobile:sync
+```
+
+Use the origin only, without a path or query. Export this variable in the same
+terminal where you run the mobile commands; Capacitor does not load it from
+`.env` or `.env.local`. Keep it set when building, and run `mobile:sync` again
+when the backend URL changes. Without it, the app shows a setup screen.
+
+### Android
+
+Install **Android Studio**, **JDK 21**, and **Android SDK 36**. Set `JAVA_HOME`
+to your JDK 21 installation. Open the project to configure the SDK location
+and start an emulator or connect an Android phone with USB debugging enabled:
+
+```bash
+pnpm mobile:android
+```
+
+Build and install the debug APK from a terminal with `adb` on its `PATH`:
+
+```bash
+pnpm mobile:apk
+adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+The APK is signed for development and appears as **Transient** on the device.
+If Android Studio is not being used, set `sdk.dir` in the ignored
+`android/local.properties` to your Android SDK directory.
+
+To use the local web server with an Android emulator instead of a deployment,
+start it with the emulator address configured for authentication:
+
+```bash
+# Terminal 1: complete the database setup in Quick start first.
+AUTH_URL=http://10.0.2.2:3000 NEXT_PUBLIC_APP_URL=http://10.0.2.2:3000 pnpm dev
+
+# Terminal 2: these exports must stay set for both sync and build.
+export MOBILE_APP_URL=http://10.0.2.2:3000
+export MOBILE_ALLOW_HTTP=1
+pnpm mobile:apk
+adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+`10.0.2.2` reaches the computer from the standard Android emulator. A physical
+phone needs a reachable LAN address or HTTPS deployment. Next.js gives
+`.env.local` precedence over `.env`; make sure an old deployment configuration
+there does not override your local database settings.
+
+### iPhone
+
+Use a Mac with **full Xcode 26 or newer**; Command Line Tools alone are not
+enough. With `MOBILE_APP_URL` still set to your working HTTPS backend:
+
+```bash
+pnpm mobile:sync
+pnpm mobile:ios
+```
+
+In `ios/App/App.xcodeproj`, select the **App** target. For a physical iPhone,
+set your signing team under **Signing & Capabilities**. Choose an iPhone simulator
+or a connected iPhone as the run destination, then press **Run**. A physical iPhone may ask you
+to enable Developer Mode. TestFlight distribution requires an Apple Developer
+Program account and App Store Connect setup.
+
+### Sign in and check the backend
+
+Set `MOBILE_EMAIL_LINKS=1` on the backend to add an **Open in the iPhone / Android
+app** link to sign-in emails. Use that link to create the session inside the
+installed app. Email + PIN is another option when `PIN_SIGN_IN_ENABLED=1` and
+the account already has a PIN. The sample seed does not assign PINs.
+
+A hosted backend needs PostgreSQL credentials, authentication/signing secrets,
+its HTTPS origin, persistent S3-compatible storage, and an email provider for
+real delivery. Deployment is currently waiting for the existing database and
+storage configuration. Native push notifications and offline cold launch are
+not yet verified. See [the mobile guide](docs/mobile.md) for the complete device
+checklist, current validation status, and Vercel test deployment instructions.
+
 ## Screenshots
 
-| | |
-| --- | --- |
-| ![Landing](docs/screenshots/landing.png) | ![Pricing](docs/screenshots/pricing.png) |
-| **Landing** — what it does, for both buyers | **Pricing** — guard companies and client organisations |
-| ![Dashboard](docs/screenshots/dashboard-mobile.png) | ![Timeline](docs/screenshots/timeline-mobile.png) |
-| **Dashboard** — the guard's shift, on a phone | **Timeline** — notes, photos, incidents, sync state |
-| ![End of shift](docs/screenshots/end-of-shift-mobile.png) | ![Reports](docs/screenshots/reports-desktop.png) |
-| **End of shift** — review, then send | **Reports** — sent, delivered, opened, bounced |
-| ![Audit](docs/screenshots/audit-desktop.png) | ![Billing](docs/screenshots/billing-desktop.png) |
-| **Audit log** — who changed what, exportable | **Billing** — plan, seats, entitlements |
+|                                                           |                                                        |
+| --------------------------------------------------------- | ------------------------------------------------------ |
+| ![Landing](docs/screenshots/landing.png)                  | ![Pricing](docs/screenshots/pricing.png)               |
+| **Landing** — what it does, for both buyers               | **Pricing** — guard companies and client organisations |
+| ![Dashboard](docs/screenshots/dashboard-mobile.png)       | ![Timeline](docs/screenshots/timeline-mobile.png)      |
+| **Dashboard** — the guard's shift, on a phone             | **Timeline** — notes, photos, incidents, sync state    |
+| ![End of shift](docs/screenshots/end-of-shift-mobile.png) | ![Reports](docs/screenshots/reports-desktop.png)       |
+| **End of shift** — review, then send                      | **Reports** — sent, delivered, opened, bounced         |
+| ![Audit](docs/screenshots/audit-desktop.png)              | ![Billing](docs/screenshots/billing-desktop.png)       |
+| **Audit log** — who changed what, exportable              | **Billing** — plan, seats, entitlements                |
 
 Captured by `node scripts/shots.mjs` against a real seeded database, not mocked.
 The script asserts every `<img>` decoded before it writes a file — a broken
@@ -77,12 +166,12 @@ image still produces a perfectly valid screenshot otherwise.
 `pnpm db:seed` gives you a guard company, one site — Westside Hotel, on `FULL`
 logging — two shifts, and four accounts you can sign in as:
 
-| Account | Role | What they see |
-| --- | --- | --- |
-| `owner@meridian.test` | owner | everything, plus plan and billing |
-| `sup.westside@meridian.test` | supervisor | reports, delivery state, audit log |
-| `guard.night@meridian.test` | guard | both seeded shifts at the hotel: last night's, finished, and one scheduled for tonight |
-| `guard.swing@meridian.test` | guard | no shift assigned — the empty state |
+| Account                      | Role       | What they see                                                                          |
+| ---------------------------- | ---------- | -------------------------------------------------------------------------------------- |
+| `owner@meridian.test`        | owner      | everything, plus plan and billing                                                      |
+| `sup.westside@meridian.test` | supervisor | reports, delivery state, audit log                                                     |
+| `guard.night@meridian.test`  | guard      | both seeded shifts at the hotel: last night's, finished, and one scheduled for tonight |
+| `guard.swing@meridian.test`  | guard      | no shift assigned — the empty state                                                    |
 
 `pnpm db:demo` goes further: it seeds, runs the background job sweep, seeds
 again and sweeps again, which is what carries photos through thumbnailing and
@@ -131,12 +220,12 @@ would actually do.
 
 ### 2. Work a shift
 
-| Step | What you tap | What happens underneath |
-| --- | --- | --- |
-| Open the shift | `Start shift`, then `Clock in` | A `Shift` row opens and the client-side store starts queueing to IndexedDB |
-| Skip the intro | `Continue without the rest`, then `Go to timeline` | The onboarding wizard is optional every time |
-| Log the shift | Add notes, photos, incidents, patrols, property and blind-spot checks | Each entry is written **locally first**, then synced. The timeline shows per-entry sync state |
-| Close it out | `End shift` in the timeline header | Opens the four-step end-of-shift flow |
+| Step           | What you tap                                                          | What happens underneath                                                                       |
+| -------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Open the shift | `Start shift`, then `Clock in`                                        | A `Shift` row opens and the client-side store starts queueing to IndexedDB                    |
+| Skip the intro | `Continue without the rest`, then `Go to timeline`                    | The onboarding wizard is optional every time                                                  |
+| Log the shift  | Add notes, photos, incidents, patrols, property and blind-spot checks | Each entry is written **locally first**, then synced. The timeline shows per-entry sync state |
+| Close it out   | `End shift` in the timeline header                                    | Opens the four-step end-of-shift flow                                                         |
 
 The timeline is the product. Everything else exists to get something into it or
 get something out of it. It is deliberately honest about sync state: an entry
@@ -183,21 +272,19 @@ for the report, `/g/[token]` for the photo gallery, `/confirm/[token]` to confir
 receipt in one tap. Open one from `/reports` to see exactly what lands in their
 inbox.
 
-
-
 **Next.js 16** (App Router, React 19, TypeScript strict) on **Postgres 17 via
 Prisma 7**, with S3-compatible object storage for photos and generated PDFs.
 
 Route groups mirror who is looking at the page:
 
-| Group | Who | What |
-| --- | --- | --- |
-| `(marketing)` | public | landing, pricing, sample report, privacy, terms — statically generated |
-| `(auth)` | anyone signing in | magic link, then a PIN for fast re-entry on a shared phone |
+| Group                                            | Who                    | What                                                                                                     |
+| ------------------------------------------------ | ---------------------- | -------------------------------------------------------------------------------------------------------- |
+| `(marketing)`                                    | public                 | landing, pricing, sample report, privacy, terms — statically generated                                   |
+| `(auth)`                                         | anyone signing in      | magic link, then a PIN for fast re-entry on a shared phone                                               |
 | `dashboard` `shift` `reports` `audit` `settings` | guards and supervisors | the authenticated app: live timeline, clock-in, end-of-shift, report status, audit log, plan and billing |
-| `r/[token]` | the client | a signed public link to the report and photo gallery, no account needed |
-| `g/[token]` | the client | the photo gallery on its own |
-| `confirm/[token]` | the client | one-tap confirmation that they received it |
+| `r/[token]`                                      | the client             | a signed public link to the report and photo gallery, no account needed                                  |
+| `g/[token]`                                      | the client             | the photo gallery on its own                                                                             |
+| `confirm/[token]`                                | the client             | one-tap confirmation that they received it                                                               |
 
 `src/lib` is split by concern — `auth`, `db`, `storage`, `email`, `pdf`, `jobs`,
 `push`, `media`, `speech`, `offline`, `validators`, `billing` — so API routes
@@ -228,7 +315,7 @@ stay thin enough to read in one screen.
 Uploaded bytes are served `content-disposition: attachment` — an inline `.svg`
 or `.html` from a user is same-origin script. Server-**derived** variants
 (a `sharp` thumbnail, a generated PDF) are the exception: they are served
-inline, the permission rides inside the *signed* token so a caller cannot add
+inline, the permission rides inside the _signed_ token so a caller cannot add
 it to a URL, and a runtime allowlist limits it to `image/jpeg` and
 `application/pdf`. If a thumbnail has not been built yet the URL falls back to
 the original, which correctly downloads instead of rendering.
@@ -250,24 +337,24 @@ gallery — both themes, every primitive, every state — is at `/dev/ui`.
 Every variable is read somewhere in the app. The ones marked **optional** have
 a working local fallback, which is what lets the quick start run offline.
 
-| Variable | Required | What it does |
-| --- | --- | --- |
-| `DATABASE_URL` | yes | Postgres connection. Matches `docker-compose.yml` on port 5544. |
-| `DATABASE_URL_TEST` | for `pnpm test` | The `db` test project truncates every table between tests, so this **must** be a different database. Both the setup script and the test helpers refuse to run unless the name contains `test`. |
-| `AUTH_SECRET` | yes | Auth.js signing key. `openssl rand -base64 32`. |
-| `AUTH_URL` | yes | Absolute URL of this app. Magic links are built from it. |
-| `NEXT_PUBLIC_APP_URL` | yes | Same value, exposed to the browser. |
-| `PIN_SIGN_IN_ENABLED` | optional | `1` turns on email + PIN sign-in. Anything else, including unset, leaves the magic link as the only way in. It fails closed on purpose: a PIN is 4 to 6 digits, so enabling it should be a decision rather than a default. |
-| `LINK_SIGNING_SECRET` | yes | Signs `/r/[token]` and `/g/[token]` client links and download tokens. `openssl rand -base64 32`. |
-| `CRON_SECRET` | yes | `GET /api/jobs/sweep` requires it as a bearer token. |
-| `EMAIL_FROM` | yes | From address on report emails. |
-| `RESEND_API_KEY` | optional | Absent → console provider writes to `.data/outbox/`. Present → real mail. |
-| `RESEND_WEBHOOK_SECRET` | optional | Verifies delivery webhooks. |
-| `STORAGE_DRIVER` | yes | `local` or `s3`. |
-| `S3_ENDPOINT` `S3_REGION` `S3_BUCKET` `S3_ACCESS_KEY_ID` `S3_SECRET_ACCESS_KEY` `S3_FORCE_PATH_STYLE` | if `s3` | Any S3-compatible service. |
-| `S3_SESSION_TOKEN` | no | Only for temporary credentials: AWS STS or an assumed IAM role. Long-lived keys (Neon, R2, MinIO) leave it unset. |
-| `VAPID_PUBLIC_KEY` `VAPID_PRIVATE_KEY` `NEXT_PUBLIC_VAPID_PUBLIC_KEY` `VAPID_SUBJECT` | optional | Web Push. Absent → push is skipped and logged. `pnpm gen:vapid`. |
-| `SWEEP_URL` | optional | Override the URL `pnpm jobs:sweep` calls. |
+| Variable                                                                                              | Required        | What it does                                                                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                                                        | yes             | Postgres connection. Matches `docker-compose.yml` on port 5544.                                                                                                                                                            |
+| `DATABASE_URL_TEST`                                                                                   | for `pnpm test` | The `db` test project truncates every table between tests, so this **must** be a different database. Both the setup script and the test helpers refuse to run unless the name contains `test`.                             |
+| `AUTH_SECRET`                                                                                         | yes             | Auth.js signing key. `openssl rand -base64 32`.                                                                                                                                                                            |
+| `AUTH_URL`                                                                                            | yes             | Absolute URL of this app. Magic links are built from it.                                                                                                                                                                   |
+| `NEXT_PUBLIC_APP_URL`                                                                                 | yes             | Same value, exposed to the browser.                                                                                                                                                                                        |
+| `PIN_SIGN_IN_ENABLED`                                                                                 | optional        | `1` turns on email + PIN sign-in. Anything else, including unset, leaves the magic link as the only way in. It fails closed on purpose: a PIN is 4 to 6 digits, so enabling it should be a decision rather than a default. |
+| `LINK_SIGNING_SECRET`                                                                                 | yes             | Signs `/r/[token]` and `/g/[token]` client links and download tokens. `openssl rand -base64 32`.                                                                                                                           |
+| `CRON_SECRET`                                                                                         | yes             | `GET /api/jobs/sweep` requires it as a bearer token.                                                                                                                                                                       |
+| `EMAIL_FROM`                                                                                          | yes             | From address on report emails.                                                                                                                                                                                             |
+| `RESEND_API_KEY`                                                                                      | optional        | Absent → console provider writes to `.data/outbox/`. Present → real mail.                                                                                                                                                  |
+| `RESEND_WEBHOOK_SECRET`                                                                               | optional        | Verifies delivery webhooks.                                                                                                                                                                                                |
+| `STORAGE_DRIVER`                                                                                      | yes             | `local` or `s3`.                                                                                                                                                                                                           |
+| `S3_ENDPOINT` `S3_REGION` `S3_BUCKET` `S3_ACCESS_KEY_ID` `S3_SECRET_ACCESS_KEY` `S3_FORCE_PATH_STYLE` | if `s3`         | Any S3-compatible service.                                                                                                                                                                                                 |
+| `S3_SESSION_TOKEN`                                                                                    | no              | Only for temporary credentials: AWS STS or an assumed IAM role. Long-lived keys (Neon, R2, MinIO) leave it unset.                                                                                                          |
+| `VAPID_PUBLIC_KEY` `VAPID_PRIVATE_KEY` `NEXT_PUBLIC_VAPID_PUBLIC_KEY` `VAPID_SUBJECT`                 | optional        | Web Push. Absent → push is skipped and logged. `pnpm gen:vapid`.                                                                                                                                                           |
+| `SWEEP_URL`                                                                                           | optional        | Override the URL `pnpm jobs:sweep` calls.                                                                                                                                                                                  |
 
 ### Switching storage
 
@@ -331,7 +418,7 @@ place the secret is shown. Its region is the literal string `auto`, and it needs
 `S3_FORCE_PATH_STYLE=true`. Nothing else changes: the driver is provider-
 agnostic, so switching is these six variables and a redeploy.
 
-Some providers issue *temporary* credentials instead, signing with three fields
+Some providers issue _temporary_ credentials instead, signing with three fields
 rather than two — AWS STS or an assumed IAM role. Handed only the first two,
 those answer `InvalidAccessKeyId` on every request, which is what
 `S3_SESSION_TOKEN` exists for. Neither Neon nor R2 needs it.
@@ -420,12 +507,14 @@ by the guard whose name is on it.
 
 `tests/db/shift-writes.test.ts` covers every write path — entries, incidents,
 packages, property and blind-spot checks, edits, strikes, handoffs — and each
-test first asserts that the colleague's shift still *reads*, so narrowing the
+test first asserts that the colleague's shift still _reads_, so narrowing the
 read rule would fail them too. The one designed cross-guard write is the
 `HANDOFF_GIVEN` entry on the outgoing shift, which is why ownership there is
 asserted on the incoming side instead.
 
 ## Deploying to Vercel
+
+For iPhone and Android device-testing builds, see [the mobile guide](docs/mobile.md).
 
 1. Push the repo and **import it from Git**. Framework detection handles the
    build. Importing is also what wires pushes to deployments: a project created
@@ -461,6 +550,7 @@ asserted on the incoming side instead.
    in this repo applies migrations automatically — run `pnpm db:deploy`
    against the production database **before** promoting a build that needs a
    new column.
+
 7. Create the first account. Transient has **no self-registration** by design,
    so a fresh deployment has nobody who can sign in and the sign-in form will
    answer identically whether or not the address exists. Run `pnpm db:seed`
@@ -494,23 +584,23 @@ pnpm start -p 3000 &
 BASE=http://localhost:3000 AUTH_URL=http://localhost:3000 node scripts/check-landing.mjs
 ```
 
-| Gate | What it proves |
-| --- | --- |
-| `check-ui` | Both themes compute to different colours; every control is hit-testable across a full 48×48 area; the wordmark's accent dot lands on the "i", read from rendered pixels |
-| `contrast` | WCAG ratios for all 35 approved pairings, with 4 known-bad pairings asserted to stay failing so the gate can be seen to fail |
-| `check-auth` | Magic link, PIN, session scoping, and that a user from one company cannot reach another's data |
-| `check-landing` | Both buyer paths, pricing, and that no CTA is a dead link |
-| `check-first-run` | A brand-new account can get from empty to a logged shift without hitting a 404 |
-| `check-shift` | Clock-in, the timeline, per-entry sync state |
-| `check-logging-modes` | Every entry type, under all three logging modes |
-| `check-end-of-shift` | Review and send |
-| `check-report` | The PDF renders, rasterises, and contains the entries |
-| `check-reports` | Delivery state is visible without opening anything |
-| `check-recipients` | The dashboard's "bounced address" link resolves; only a supervisor at that company can open it |
-| `check-jobs` | The sweep processes media and reports, and is authorised |
-| `check-pwa` | Manifest, icons, service worker, offline shell |
-| `check-billing` | Plan, seats, and that an unentitled feature is actually blocked |
-| `check-lighthouse` | ≥95 mobile performance on the four public routes |
+| Gate                  | What it proves                                                                                                                                                          |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check-ui`            | Both themes compute to different colours; every control is hit-testable across a full 48×48 area; the wordmark's accent dot lands on the "i", read from rendered pixels |
+| `contrast`            | WCAG ratios for all 35 approved pairings, with 4 known-bad pairings asserted to stay failing so the gate can be seen to fail                                            |
+| `check-auth`          | Magic link, PIN, session scoping, and that a user from one company cannot reach another's data                                                                          |
+| `check-landing`       | Both buyer paths, pricing, and that no CTA is a dead link                                                                                                               |
+| `check-first-run`     | A brand-new account can get from empty to a logged shift without hitting a 404                                                                                          |
+| `check-shift`         | Clock-in, the timeline, per-entry sync state                                                                                                                            |
+| `check-logging-modes` | Every entry type, under all three logging modes                                                                                                                         |
+| `check-end-of-shift`  | Review and send                                                                                                                                                         |
+| `check-report`        | The PDF renders, rasterises, and contains the entries                                                                                                                   |
+| `check-reports`       | Delivery state is visible without opening anything                                                                                                                      |
+| `check-recipients`    | The dashboard's "bounced address" link resolves; only a supervisor at that company can open it                                                                          |
+| `check-jobs`          | The sweep processes media and reports, and is authorised                                                                                                                |
+| `check-pwa`           | Manifest, icons, service worker, offline shell                                                                                                                          |
+| `check-billing`       | Plan, seats, and that an unentitled feature is actually blocked                                                                                                         |
+| `check-lighthouse`    | ≥95 mobile performance on the four public routes                                                                                                                        |
 
 Use an explicit port. Port 3000 is a common collision, and `next start` failing
 with `EADDRINUSE` while something else answers on that port produces a `200`
@@ -518,20 +608,20 @@ that proves nothing.
 
 ## Scripts
 
-| Script | What it does |
-| --- | --- |
-| `pnpm dev` | Next dev server |
-| `pnpm build` / `pnpm start` | Production build and serve |
-| `pnpm verify` | The full headless gate. Run before committing. |
-| `pnpm test` / `test:watch` / `test:e2e` | Vitest, watch mode, Playwright |
-| `pnpm contrast` / `contrast:check` | Print the contrast table / fail on a violation |
-| `pnpm check:ui` | Browser gate (needs a running server) |
-| `pnpm db:up` / `db:down` | Postgres + MinIO containers |
-| `pnpm db:migrate` / `db:deploy` / `db:reset` / `db:studio` | Prisma |
-| `pnpm db:seed` / `db:demo` | Seed / seed and run the pipeline end to end |
-| `pnpm db:test:setup` | Create and migrate the test database |
-| `pnpm jobs:sweep` | Run the background job by hand |
-| `pnpm gen:vapid` / `gen:icons` | Web Push keys / PWA icons |
+| Script                                                     | What it does                                   |
+| ---------------------------------------------------------- | ---------------------------------------------- |
+| `pnpm dev`                                                 | Next dev server                                |
+| `pnpm build` / `pnpm start`                                | Production build and serve                     |
+| `pnpm verify`                                              | The full headless gate. Run before committing. |
+| `pnpm test` / `test:watch` / `test:e2e`                    | Vitest, watch mode, Playwright                 |
+| `pnpm contrast` / `contrast:check`                         | Print the contrast table / fail on a violation |
+| `pnpm check:ui`                                            | Browser gate (needs a running server)          |
+| `pnpm db:up` / `db:down`                                   | Postgres + MinIO containers                    |
+| `pnpm db:migrate` / `db:deploy` / `db:reset` / `db:studio` | Prisma                                         |
+| `pnpm db:seed` / `db:demo`                                 | Seed / seed and run the pipeline end to end    |
+| `pnpm db:test:setup`                                       | Create and migrate the test database           |
+| `pnpm jobs:sweep`                                          | Run the background job by hand                 |
+| `pnpm gen:vapid` / `gen:icons`                             | Web Push keys / PWA icons                      |
 
 ## Where the decisions are written down
 

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 
+import { NativeProvider } from "@/components/native-provider";
 import { themeInitScript } from "@/lib/theme";
 
 import "./globals.css";
@@ -59,7 +60,10 @@ export default function RootLayout({
             gets a flash of the wrong theme on every cold open. */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="min-h-dvh bg-bg text-text antialiased">{children}</body>
+      <body className="min-h-dvh bg-bg text-text antialiased">
+        <NativeProvider />
+        {children}
+      </body>
     </html>
   );
 }
