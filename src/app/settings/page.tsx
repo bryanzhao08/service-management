@@ -130,6 +130,31 @@ export default async function SettingsPage() {
         </Card>
 
         {/*
+          Admin and above. A supervisor configures sites but does not decide
+          who works for the company, which is the line section 8 already drew
+          in `can.manageUsers`.
+        */}
+        {actor.role === "ADMIN" || actor.role === "OWNER" ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Team</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-text-muted">
+                Who is in this company, and how a new guard gets an account.
+                Transient has no sign-up page, so this is the only way someone
+                joins.
+              </p>
+              <Button asChild variant="secondary">
+                <Link href="/settings/team" data-team-link>
+                  Manage team
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {/*
           Owner-only. A supervisor cannot act on a billing fact and does not
           need to carry one into a shift.
         */}

@@ -25,6 +25,24 @@ export const EMBER = "#df6d1c";
 /** `--color-copper`. The worst states the product has: HIGH severity, bounced. */
 export const COPPER = "#996227";
 
+/**
+ * HTML-escapes a value before it goes into an email body.
+ *
+ * Names here are typed by one customer and read by another: an admin invites a
+ * guard, and the guard's client renders whatever the admin's `name` field held.
+ * Mail clients drop `<script>`, but an `<a href>` survives in plenty of them,
+ * which turns a Transient-branded email into a phishing vehicle without ever
+ * touching our servers.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function shell(heading: string, body: string): string {
   return `<!doctype html>
 <html lang="en">
@@ -155,6 +173,83 @@ export function verifyRecipientEmail(params: {
   return {
     to,
     subject: `Confirm you receive ${siteName} shift reports`,
+    html,
+    text,
+  };
+}
+
+/**
+ * "You have been added to Transient."
+ *
+ * Carries no credential, and that is the point. A live sign-in link inside an
+ * invite means a mistyped address is an account, silently: the admin sees the
+ * invite as sent, the real guard never gets one, and whoever owns the typo
+ * holds a working session. So this email only says an account exists and
+ * points at `/sign-in`, where the recipient has to prove control of the
+ * mailbox through the magic-link flow that is already hardened for it.
+ *
+ * It costs the guard one extra step. It buys the property that possession of
+ * this email grants nothing at all.
+ */
+export function teamInviteEmail(params: {
+  to: string;
+  name: string;
+  companyName: string;
+  invitedBy: string;
+  signInUrl: string;
+}): EmailMessage {
+  const name = escapeHtml(params.name);
+  const companyName = escapeHtml(params.companyName);
+  const invitedBy = escapeHtml(params.invitedBy);
+  const { to, signInUrl } = params;
+
+  const html = shell(
+    "You have been added to Transient",
+    `<p style="margin:0 0 24px;font-size:16px;line-height:1.5;">
+       Hi ${name}, ${invitedBy} added you to <strong>${companyName}</strong> on
+       Transient, the app your team uses to log shifts and send the report at
+       the end of one.
+     </p>
+     <p style="margin:0 0 24px;font-size:16px;line-height:1.5;">
+       Sign in with this email address and we will send you a link. After that
+       you pick a PIN on your phone, and from then on it is your email and six
+       digits. There is no password to remember.
+     </p>
+     <p style="margin:0 0 24px;">
+       <a href="${signInUrl}"
+          style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
+         Sign in to Transient
+       </a>
+     </p>
+     <p style="margin:0 0 8px;font-size:13px;opacity:0.7;">
+       If the button does not work, paste this into your browser:
+     </p>
+     <p style="margin:0 0 24px;font-size:13px;word-break:break-all;opacity:0.7;">${signInUrl}</p>
+     <p style="margin:0;font-size:13px;opacity:0.7;">
+       This email does not sign you in on its own. If you were not expecting
+       it, ignore it and tell ${invitedBy} they used the wrong address.
+     </p>`,
+  );
+
+  const text = [
+    "You have been added to Transient",
+    "",
+    `Hi ${params.name}, ${params.invitedBy} added you to ${params.companyName} on`,
+    "Transient, the app your team uses to log shifts and send the report at the",
+    "end of one.",
+    "",
+    "Sign in with this email address and we will send you a link. After that you",
+    "pick a PIN on your phone, and from then on it is your email and six digits.",
+    "",
+    signInUrl,
+    "",
+    "This email does not sign you in on its own. If you were not expecting it,",
+    "ignore it.",
+  ].join("\n");
+
+  return {
+    to,
+    subject: `${params.invitedBy} added you to ${params.companyName} on Transient`,
     html,
     text,
   };
