@@ -11,7 +11,13 @@ describe("native test server boundary", () => {
       url: "https://example.com/dashboard",
       cleartext: false,
       errorPath: "offline.html",
+      allowNavigation: ["example.com"],
     });
+  });
+  it("keeps the backend inside the WebView instead of the system browser", () => {
+    expect(mobileServer("http://192.168.1.2:3000", "1")?.allowNavigation).toEqual([
+      "192.168.1.2",
+    ]);
   });
   it("only permits HTTP with an explicit local testing flag", () => {
     expect(() => mobileServer("http://192.168.1.2:3000")).toThrow();

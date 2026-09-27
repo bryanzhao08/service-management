@@ -15,7 +15,7 @@ async function main() {
   );
   if (process.platform === "darwin" && existsSync("ios/App/App/Info.plist")) {
     const domains = server
-      ? ["localhost", new URL(server.url).hostname]
+      ? [...new Set(["localhost", new URL(server.url).hostname])]
       : ["localhost"];
     execFileSync("/usr/bin/plutil", [
       "-replace",
