@@ -628,3 +628,9 @@ that proves nothing.
 `ASSUMPTIONS.md` records what was decided and what is deliberately not built,
 including which subscription entitlements are enforced today and which are
 listed but unimplemented. Read it before quoting a capability to anyone.
+
+### Appearance and icons
+
+Dark mode is the default. Use the moon/sun control to switch modes, or choose Dark, Light, or System in Settings → Appearance. For the palette, glass behavior, and icon regeneration instructions, see [docs/appearance.md](docs/appearance.md). Run `pnpm mobile:icons` to regenerate web, iOS, and Android assets from the shared vector source.
+
+For a database-free preview of the **app interface**, run `pnpm dev` and open [http://localhost:3000/dev/app](http://localhost:3000/dev/app). It uses the app’s dashboard and settings components with clearly marked sample data. Real shifts and downloads require the backend setup above.

@@ -1,18 +1,10 @@
-/**
- * Generates the PWA icons and the web manifest from the same geometry and the
- * same colors as `<Mark>` in src/components/brand.tsx.
- *
- * The hexes are READ OUT of globals.css rather than typed here. A second copy
- * of `#76d337` in this file is a copy that drifts the day someone retunes the
- * palette, and nothing would fail — the icons would just quietly stop matching
- * the app. Same reasoning as tests/unit/email-palette.test.ts.
- *
- * Run: pnpm gen:icons
- */
+/** Generate PWA and native icons from one glass-lens vector and app tokens. */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import sharp from "sharp";
+
+import { brandIconArtwork } from "../src/lib/brand-icon";
 
 // tsx compiles this to CJS (package.json has no "type": "module"), so neither
 // top-level await nor import.meta.dirname is available. pnpm always runs a
@@ -34,31 +26,24 @@ async function readToken(css: string, name: string): Promise<string> {
   return match[1];
 }
 
-/**
- * `rounded` matches `<Mark>`: a 15/64 corner radius, for contexts that show the
- * icon as-is. `maskable` fills the full square, because Android applies its own
- * mask and a pre-rounded plate leaves clipped corners inside it.
- *
- * The dot is r=13 of a 64 box, i.e. 20.3% of the width from center. The
- * maskable safe zone is the inner 80% (radius 25.6/64), so the dot sits well
- * inside it and one geometry serves both.
- */
 function markSvg({
   size,
   plate,
-  dot,
+  shade,
+  accent,
+  highlight,
   maskable,
+  layer = "full",
 }: {
   size: number;
   plate: string;
-  dot: string;
+  shade: string;
+  accent: string;
+  highlight: string;
   maskable: boolean;
+  layer?: "full" | "foreground" | "background";
 }): string {
-  const rx = maskable ? 0 : 15;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="${rx}" fill="${plate}"/>
-  <circle cx="32" cy="32" r="13" fill="${dot}"/>
-</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64">${brandIconArtwork({ id: "transient", plate, shade, accent, highlight, maskable, layer })}</svg>`;
 }
 
 const TARGETS = [
@@ -74,17 +59,21 @@ const TARGETS = [
 async function main() {
   const css = await readFile(CSS, "utf8");
   const plate = await readToken(css, "color-ink");
-  const dot = await readToken(css, "color-lime");
+  const accent = await readToken(css, "color-burgundy");
+  const shade = await readToken(css, "color-maroon");
+  const highlight = await readToken(css, "color-rose");
 
   await mkdir(OUT, { recursive: true });
 
   for (const target of TARGETS) {
-    const svg = markSvg({ size: target.size, plate, dot, maskable: target.maskable });
-    // Only the square variants get flattened. Flattening a ROUNDED icon fills
-    // its transparent corners with the plate color, which makes the corner
-    // radius invisible against any light background — the icon silently
-    // becomes a square. Measured: corners came back #030701 either way until
-    // this was made conditional.
+    const svg = markSvg({
+      size: target.size,
+      plate,
+      shade,
+      accent,
+      highlight,
+      maskable: target.maskable,
+    });
     const pipeline = sharp(Buffer.from(svg)).png();
     const png = await (
       target.maskable ? pipeline.flatten({ background: plate }) : pipeline
@@ -92,6 +81,43 @@ async function main() {
     await writeFile(path.join(OUT, target.file), png);
     console.log(`wrote ${target.file} (${target.size}px, ${png.length} bytes)`);
   }
+
+  // Capacitor's generator uses the opaque full-size source for every launcher.
+  const nativeSvg = markSvg({
+    size: 1024,
+    plate,
+    shade,
+    accent,
+    highlight,
+    maskable: true,
+  });
+  await mkdir(path.join(ROOT, "mobile/assets"), { recursive: true });
+  await writeFile(
+    path.join(ROOT, "mobile/assets/icon-only.png"),
+    await sharp(Buffer.from(nativeSvg)).png().toBuffer(),
+  );
+  await writeFile(path.join(ROOT, "public/icons/icon-source.svg"), nativeSvg);
+  for (const layer of ["foreground", "background"] as const) {
+    const svg = markSvg({
+      size: 1024,
+      plate,
+      shade,
+      accent,
+      highlight,
+      maskable: true,
+      layer,
+    });
+    await writeFile(
+      path.join(ROOT, `mobile/assets/icon-${layer}.png`),
+      await sharp(Buffer.from(svg)).png().toBuffer(),
+    );
+  }
+  // A black launch canvas avoids a white flash before the dark-default app loads.
+  const splash = `<svg xmlns="http://www.w3.org/2000/svg" width="2732" height="2732" viewBox="0 0 2732 2732"><rect width="2732" height="2732" fill="${plate}"/><svg x="1174" y="1174" width="384" height="384" viewBox="0 0 64 64">${brandIconArtwork({ id: "splash", plate, shade, accent, highlight })}</svg></svg>`;
+  await writeFile(
+    path.join(ROOT, "mobile/assets/splash.png"),
+    await sharp(Buffer.from(splash)).png().toBuffer(),
+  );
 
   const manifest = {
     name: "Transient",
@@ -117,7 +143,7 @@ async function main() {
 
   const manifestPath = path.join(ROOT, "public/manifest.webmanifest");
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  console.log(`wrote manifest.webmanifest (theme ${plate}, accent ${dot})`);
+  console.log(`wrote manifest.webmanifest (theme ${plate}, accent ${accent})`);
 }
 
 main().catch((error: unknown) => {

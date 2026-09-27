@@ -45,12 +45,12 @@ export function registerFonts(): void {
 }
 
 export const COLORS = {
-  ink: "#030701",
-  forest: "#116906",
-  ember: "#df6d1c",
-  rule: "#d8dcd6",
-  muted: "#5b625a",
-  faint: "#f2f4f1",
+  ink: "#000000",
+  forest: "#000000",
+  ember: "#000000",
+  rule: "#d8d8d8",
+  muted: "#595959",
+  faint: "#f5f5f5",
   page: "#ffffff",
 } as const;
 
@@ -96,7 +96,13 @@ export const styles = StyleSheet.create({
   // is. At 17pt the glyphs need ~20.6pt and the 2pt margin cannot absorb the
   // difference, so the date underneath was drawn 5.5pt inside the title. A
   // `lineHeight` set here resolves against this element's fontSize instead.
-  h1: { fontSize: 17, lineHeight: 1.25, fontWeight: 700, color: COLORS.forest, marginBottom: 2 },
+  h1: {
+    fontSize: 17,
+    lineHeight: 1.25,
+    fontWeight: 700,
+    color: COLORS.forest,
+    marginBottom: 2,
+  },
   h2: {
     fontSize: 11,
     fontWeight: 600,

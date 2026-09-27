@@ -15,6 +15,8 @@ import {
 import Link from "next/link";
 import * as React from "react";
 
+import { ThemeToggle } from "@/components/theme-toggle";
+import { ChevronLeft } from "lucide-react";
 import { NoteSheet } from "@/components/shift/note-sheet";
 import { PhotoSheet } from "@/components/shift/photo-sheet";
 import { IncidentSheet } from "@/components/shift/incident-sheet";
@@ -133,6 +135,9 @@ export function ShiftTimeline({
   site,
   initialEntries,
   canWrite,
+  backHref = "/dashboard",
+  entryLinksEnabled = true,
+  previewActions = false,
 }: {
   shift: {
     id: string;
@@ -144,6 +149,9 @@ export function ShiftTimeline({
   site: SiteConfig;
   initialEntries: readonly TimelineEntryData[];
   canWrite: boolean;
+  backHref?: string;
+  entryLinksEnabled?: boolean;
+  previewActions?: boolean;
 }) {
   const [entries, setEntries] = React.useState<TimelineEntryData[]>([
     ...initialEntries,
@@ -227,32 +235,45 @@ export function ShiftTimeline({
   }, [entries, site.timezone]);
 
   return (
-    <div className="bg-surface-sunken flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-20 border-b border-border bg-surface">
-        <div className="mx-auto flex w-full max-w-lg items-center gap-3 px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-medium text-text">{site.name}</p>
-            <p className="text-sm text-text-muted">
+    <div className="flex min-h-dvh flex-col bg-bg">
+      <header className="pt-safe sticky top-0 z-20 mx-auto w-full max-w-lg px-3">
+        <div className="glass rounded-[28px] p-3">
+          <div className="flex items-center gap-2">
+            <Link
+              href={backHref}
+              aria-label="Back to shifts"
+              className="flex size-12 shrink-0 items-center justify-center rounded-full text-text"
+            >
+              <ChevronLeft className="size-6" aria-hidden="true" />
+            </Link>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold text-text">{site.name}</p>
+              <p className="text-xs text-text-muted">{site.code}</p>
+            </div>
+            <ThemeToggle />
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/40 pt-3">
+            <div className="min-w-0 flex-1 text-sm text-text-muted">
               {shift.clockInAt ? (
                 <>
                   <ElapsedTimer
                     since={shift.clockInAt}
                     until={shift.clockOutAt}
-                    className="font-mono"
+                    className="font-semibold text-text tabular-nums"
                   />
                   {" on shift"}
                 </>
               ) : (
                 "Not clocked in"
               )}
-            </p>
+            </div>
+            <SyncDot pending={pending} />
+            {canWrite && shift.clockInAt && !shift.clockOutAt ? (
+              <Button asChild variant="ghost" className="shrink-0 px-3">
+                <Link href={`/shift/${shift.id}/end`}>End shift</Link>
+              </Button>
+            ) : null}
           </div>
-          <SyncDot pending={pending} />
-          {canWrite && shift.clockInAt && !shift.clockOutAt ? (
-            <Button asChild variant="ghost" className="shrink-0 px-3">
-              <Link href={`/shift/${shift.id}/end`}>End shift</Link>
-            </Button>
-          ) : null}
         </div>
 
         {ongoing.length > 0 ? (
@@ -294,7 +315,7 @@ export function ShiftTimeline({
               <section key={hour} aria-labelledby={`hour-${hour}`}>
                 <h2
                   id={`hour-${hour}`}
-                  className="bg-surface-sunken sticky top-[68px] z-10 -mx-4 px-4 py-1 font-mono text-sm text-text-muted"
+                  className="px-1 py-2 text-sm font-medium text-text-muted tabular-nums"
                 >
                   {hour}
                 </h2>
@@ -305,6 +326,7 @@ export function ShiftTimeline({
                       entry={entry}
                       timezone={site.timezone}
                       shiftId={shift.id}
+                      linksEnabled={entryLinksEnabled}
                     />
                   ))}
                 </ol>
@@ -314,11 +336,11 @@ export function ShiftTimeline({
         )}
       </main>
 
-      {canWrite ? (
+      {canWrite || previewActions ? (
         <>
           <nav
             aria-label="Log an entry"
-            className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)]"
+            className="glass fixed inset-x-3 bottom-[max(12px,env(safe-area-inset-bottom))] z-30 mx-auto max-w-lg rounded-[28px]"
           >
             <div
               className="mx-auto grid w-full max-w-lg gap-2 p-3"
@@ -333,55 +355,60 @@ export function ShiftTimeline({
                   label={action.label}
                   tone={action.tone}
                   onClick={() => openSheet(action.id)}
+                  disabled={!canWrite}
                 />
               ))}
             </div>
           </nav>
 
-          <NoteSheet
-            key={`note-${opens.note ?? 0}`}
-            open={sheet === "note"}
-            onOpenChange={(next: boolean) => setSheet(next ? "note" : null)}
-            shiftId={shift.id}
-            areas={site.areas}
-            timezone={site.timezone}
-            onSaved={addEntry}
-            onPendingChange={setPending}
-          />
-          <PhotoSheet
-            key={`photo-${opens.photo ?? 0}`}
-            open={sheet === "photo"}
-            onOpenChange={(next: boolean) => setSheet(next ? "photo" : null)}
-            shiftId={shift.id}
-            areas={site.areas}
-            timezone={site.timezone}
-            onSaved={addEntry}
-            onPendingChange={setPending}
-          />
-          <IncidentSheet
-            key={`incident-${opens.incident ?? 0}`}
-            open={sheet === "incident"}
-            onOpenChange={(next: boolean) => setSheet(next ? "incident" : null)}
-            shiftId={shift.id}
-            site={site}
-            onSaved={addEntry}
-          />
-          <PackageSheet
-            key={`package-${opens.package ?? 0}`}
-            open={sheet === "package"}
-            onOpenChange={(next: boolean) => setSheet(next ? "package" : null)}
-            shiftId={shift.id}
-            onSaved={addEntry}
-          />
-          <MoreSheet
-            key={`more-${opens.more ?? 0}`}
-            open={sheet === "more"}
-            onOpenChange={(next: boolean) => setSheet(next ? "more" : null)}
-            shiftId={shift.id}
-            site={site}
-            onPackage={() => openSheet("package")}
-            onSaved={addEntry}
-          />
+          {canWrite && (
+            <>
+              <NoteSheet
+                key={`note-${opens.note ?? 0}`}
+                open={sheet === "note"}
+                onOpenChange={(next: boolean) => setSheet(next ? "note" : null)}
+                shiftId={shift.id}
+                areas={site.areas}
+                timezone={site.timezone}
+                onSaved={addEntry}
+                onPendingChange={setPending}
+              />
+              <PhotoSheet
+                key={`photo-${opens.photo ?? 0}`}
+                open={sheet === "photo"}
+                onOpenChange={(next: boolean) => setSheet(next ? "photo" : null)}
+                shiftId={shift.id}
+                areas={site.areas}
+                timezone={site.timezone}
+                onSaved={addEntry}
+                onPendingChange={setPending}
+              />
+              <IncidentSheet
+                key={`incident-${opens.incident ?? 0}`}
+                open={sheet === "incident"}
+                onOpenChange={(next: boolean) => setSheet(next ? "incident" : null)}
+                shiftId={shift.id}
+                site={site}
+                onSaved={addEntry}
+              />
+              <PackageSheet
+                key={`package-${opens.package ?? 0}`}
+                open={sheet === "package"}
+                onOpenChange={(next: boolean) => setSheet(next ? "package" : null)}
+                shiftId={shift.id}
+                onSaved={addEntry}
+              />
+              <MoreSheet
+                key={`more-${opens.more ?? 0}`}
+                open={sheet === "more"}
+                onOpenChange={(next: boolean) => setSheet(next ? "more" : null)}
+                shiftId={shift.id}
+                site={site}
+                onPackage={() => openSheet("package")}
+                onSaved={addEntry}
+              />
+            </>
+          )}
         </>
       ) : (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface px-4 py-3 pb-[env(safe-area-inset-bottom)]">
@@ -401,25 +428,28 @@ function ActionButton({
   label,
   onClick,
   tone,
+  disabled = false,
 }: {
   icon: React.ElementType;
   label: string;
   onClick: () => void;
   tone?: "danger";
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={cn(
-        "flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-[var(--radius-control)] border text-xs font-medium",
+        "app-button flex min-h-[72px] flex-col items-center justify-center gap-2 rounded-[20px] border text-xs font-medium active:opacity-70 disabled:opacity-60",
         "focus-visible:outline-focus focus-visible:outline-2 focus-visible:outline-offset-2",
         tone === "danger"
-          ? "border-transparent bg-danger text-on-danger"
-          : "bg-surface-sunken border-border text-text",
+          ? "border-danger/30 bg-danger/10 text-danger"
+          : "glass-lens border-transparent text-text",
       )}
     >
-      <Icon aria-hidden="true" className="size-5" />
+      <Icon aria-hidden="true" className="size-6" strokeWidth={1.75} />
       {label}
     </button>
   );
@@ -439,7 +469,7 @@ function SyncDot({ pending }: { pending: number }) {
     >
       <span
         aria-hidden="true"
-        className={cn("size-2.5 rounded-full", synced ? "bg-primary" : "bg-attention")}
+        className={cn("size-2.5 rounded-full", synced ? "bg-accent" : "bg-attention")}
       />
       {synced ? "Synced" : `${pending} waiting`}
     </p>
@@ -490,10 +520,12 @@ function TimelineRow({
   entry,
   timezone,
   shiftId,
+  linksEnabled = true,
 }: {
   entry: TimelineEntryData;
   timezone: string;
   shiftId: string;
+  linksEnabled?: boolean;
 }) {
   const Icon = ICONS[entry.type] ?? Plus;
   const deleted = entry.deletedAt !== null;
@@ -503,6 +535,9 @@ function TimelineRow({
     <li>
       <Link
         href={`/shift/${shiftId}/entry/${entry.id}`}
+        aria-disabled={!linksEnabled || undefined}
+        onClick={linksEnabled ? undefined : (event) => event.preventDefault()}
+        tabIndex={linksEnabled ? undefined : -1}
         className={cn(
           "flex min-h-tap gap-3 rounded-[var(--radius-card)] border border-border bg-surface p-3",
           "focus-visible:outline-focus focus-visible:outline-2 focus-visible:outline-offset-2",
@@ -511,18 +546,18 @@ function TimelineRow({
       >
         <span
           className={cn(
-            "flex size-8 shrink-0 items-center justify-center rounded-full",
-            incident ? "bg-danger text-on-danger" : "bg-surface-sunken text-text-muted",
+            "flex size-10 shrink-0 items-center justify-center rounded-[14px]",
+            incident ? "bg-danger text-on-danger" : "glass-lens text-accent",
           )}
         >
-          <Icon aria-hidden="true" className="size-4" />
+          <Icon aria-hidden="true" className="size-5" strokeWidth={1.75} />
         </span>
 
         <span className="min-w-0 flex-1">
-          <span className="flex items-baseline gap-2">
+          <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <time
               dateTime={entry.occurredAt}
-              className="font-mono text-sm text-text-muted tabular-nums"
+              className="text-sm font-medium text-text-muted tabular-nums"
             >
               {formatClock(new Date(entry.occurredAt), timezone)}
             </time>

@@ -2,13 +2,7 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-/**
- * The surface every list row, form section, and summary block sits on.
- *
- * On dark, elevation is a 1px border and nothing else (section 6.3) — a
- * shadow on `ink` is invisible anyway. On light, `--elevation` carries a real
- * shadow, so `.elevation` is theme-aware rather than conditional in JS.
- */
+/** Opaque data surfaces keep shift information clear in either color mode. */
 export function Card({
   className,
   interactive = false,

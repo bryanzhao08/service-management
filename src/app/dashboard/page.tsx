@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AppChrome } from "@/components/app-chrome";
+import {
+  GuardDashboardView,
+  RecentReports,
+} from "@/components/dashboard/guard-dashboard";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StartUnscheduled } from "@/components/shift/start-unscheduled";
 import { can, requireUnlockedActor } from "@/lib/auth/guards";
 import { db, type Actor } from "@/lib/db/scoped";
 import { averageEndFlowMs } from "@/lib/db/shift-end";
-import { formatClock, formatElapsed } from "@/lib/time";
-import { formatDuration } from "@/lib/utils";
+import { formatClock } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -30,20 +32,25 @@ export default async function DashboardPage() {
   const me = await db(actor).user.findById(actor.userId);
 
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8 sm:px-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold text-text">{me?.name ?? "Signed in"}</h1>
-        <p className="text-sm text-text-muted capitalize">
-          {actor.role.toLowerCase().replace("_", " ")}
-        </p>
-      </header>
+    <>
+      <AppChrome />
+      <main className="mx-auto w-full max-w-3xl space-y-6 px-4 pt-4 pb-28 sm:px-6">
+        <header className="space-y-1">
+          <h1 className="text-3xl font-semibold tracking-tight text-text">
+            {can.viewAllShiftsAtSite(actor) ? "Site overview" : "Your shifts"}
+          </h1>
+          <p className="text-sm text-text-muted capitalize">
+            {me?.name ?? "Signed in"} · {actor.role.toLowerCase().replace("_", " ")}
+          </p>
+        </header>
 
-      {can.viewAllShiftsAtSite(actor) ? (
-        <SupervisorView actor={actor} />
-      ) : (
-        <GuardView actor={actor} />
-      )}
-    </main>
+        {can.viewAllShiftsAtSite(actor) ? (
+          <SupervisorView actor={actor} />
+        ) : (
+          <GuardView actor={actor} />
+        )}
+      </main>
+    </>
   );
 }
 
@@ -57,126 +64,20 @@ async function GuardView({ actor }: { actor: Actor }) {
     scoped.shift.assignedSitesForActor(),
   ]);
 
-  // An active shift is the only thing that matters while it is running, so it
-  // replaces the start card rather than sitting beside it. Two primary buttons
-  // on one screen is how a guard clocks into the wrong shift.
-  const next = startable.find((shift) => shift.id !== active?.id);
-  const others = startable.filter((shift) => shift.id !== next?.id);
-
   return (
-    <div className="space-y-6">
-      {active ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>On shift</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-lg font-medium text-text">{active.site.name}</p>
-              <p className="text-sm text-text-muted">
-                {active.clockInAt
-                  ? `Started ${formatClock(active.clockInAt, active.site.timezone)} · ${formatElapsed(active.clockInAt, new Date())} elapsed`
-                  : "Not clocked in yet"}
-              </p>
-            </div>
-            <Button asChild size="xl" className="w-full">
-              <Link href={`/shift/${active.id}`}>Resume shift</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      ) : next ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Next shift</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-lg font-medium text-text">{next.site.name}</p>
-              <p className="text-sm text-text-muted">
-                {next.template?.name ?? "Scheduled"} ·{" "}
-                {formatClock(next.scheduledStart, next.site.timezone)}
-              </p>
-            </div>
-            <Button asChild size="xl" className="w-full">
-              <Link href={`/shift/${next.id}/start`}>Start shift</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <StartUnscheduled sites={assignedSites} />
-      )}
-
-      {/* More than one assignment, so the picker is the list itself rather
-          than a dropdown the guard must open to discover. */}
-      {!active && others.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Also scheduled</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="divide-y divide-border">
-              {others.map((shift) => (
-                <li
-                  key={shift.id}
-                  className="flex items-center justify-between gap-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-text">{shift.site.name}</p>
-                    <p className="text-sm text-text-muted">
-                      {formatClock(shift.scheduledStart, shift.site.timezone)}
-                    </p>
-                  </div>
-                  <Button asChild variant="secondary">
-                    <Link href={`/shift/${shift.id}/start`}>Start</Link>
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <RecentReports reports={recent} />
-      <EndOfShiftPace pace={pace} />
-    </div>
+    <GuardDashboardView
+      active={active}
+      startable={startable}
+      recent={recent}
+      pace={pace}
+      assignedSites={assignedSites}
+    />
   );
 }
 
 /** Midnight on the 1st, in the viewer's own clock. */
 function startOfMonth(now = new Date()): Date {
   return new Date(now.getFullYear(), now.getMonth(), 1);
-}
-
-/**
- * The quiet stat from section 9.2.
- *
- * Deliberately the guard's own number and nothing else: no target, no
- * comparison, no colour. A number that ranks guards against each other turns
- * "write down what happened" into "get off the clock", and the report stops
- * being evidence. It exists so a guard can see the thing the product promised
- * them actually happened.
- */
-function EndOfShiftPace({
-  pace,
-}: {
-  pace: { averageMs: number; shifts: number } | null;
-}) {
-  if (!pace) return null;
-  return (
-    <Card>
-      <CardContent className="flex items-baseline justify-between gap-4 py-4">
-        <div className="min-w-0">
-          <p className="text-sm text-text-muted">Your end-of-shift time this month</p>
-          <p className="text-xs text-text-muted">
-            Across {pace.shifts} {pace.shifts === 1 ? "shift" : "shifts"}
-          </p>
-        </div>
-        <p className="text-xl font-semibold text-text tabular-nums">
-          {formatDuration(pace.averageMs)}
-        </p>
-      </CardContent>
-    </Card>
-  );
 }
 
 async function SupervisorView({ actor }: { actor: Actor }) {
@@ -284,64 +185,5 @@ async function SupervisorView({ actor }: { actor: Actor }) {
 
       <RecentReports reports={recent} />
     </div>
-  );
-}
-
-type RecentReport = Awaited<
-  ReturnType<ReturnType<typeof db>["shift"]["recentReportsForActor"]>
->[number];
-
-function RecentReports({ reports }: { reports: RecentReport[] }) {
-  if (reports.length === 0) return null;
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Recent reports</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ul className="divide-y divide-border">
-          {reports.map((report) => {
-            // Worst status wins. One bounce out of five deliveries is exactly
-            // the thing the reader needs to see, and an aggregate "sent" would
-            // bury it.
-            const bounced = report.deliveries.some((d) => d.status === "BOUNCED");
-            const delivered =
-              report.deliveries.length > 0 &&
-              report.deliveries.every((d) => d.status === "DELIVERED");
-            return (
-              <li
-                key={report.id}
-                className="flex items-center justify-between gap-4 py-3"
-              >
-                <div className="min-w-0">
-                  <a
-                    // A plain anchor, not a Link, for the same reason as the
-                    // CSV export: this returns a file. It used to point at
-                    // `/reports/${report.id}`, which no route ever served, so
-                    // every row in this card was a 404 -- and because Next
-                    // prefetches Links, it 404'd on hover without anyone
-                    // clicking. The PDF is the report as far as a reader is
-                    // concerned, so link the artifact rather than build a
-                    // second rendering of it.
-                    href={`/api/reports/${report.id}/pdf`}
-                    className="block min-w-0"
-                  >
-                    <span className="block truncate text-text">
-                      {report.shift.site.name}
-                    </span>
-                    <span className="block text-sm text-text-muted">
-                      {formatClock(report.createdAt, report.shift.site.timezone)}
-                    </span>
-                  </a>
-                </div>
-                <Badge tone={bounced ? "danger" : delivered ? "primary" : "neutral"}>
-                  {bounced ? "Bounced" : delivered ? "Delivered" : "Sent"}
-                </Badge>
-              </li>
-            );
-          })}
-        </ul>
-      </CardContent>
-    </Card>
   );
 }

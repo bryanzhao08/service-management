@@ -108,7 +108,7 @@ export function PhotoGrid({
             <button
               type="button"
               onClick={onAdd}
-              className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-[var(--radius-card)] border border-dashed border-border text-text-muted transition-colors hover:border-primary hover:text-primary"
+              className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-[var(--radius-card)] border border-dashed border-border text-text-muted transition-colors hover:border-primary hover:text-accent"
             >
               <Plus className="size-5" aria-hidden="true" />
               <span className="text-xs">Add photo</span>

@@ -111,7 +111,7 @@ export function PlanCard({ plan }: { plan: Plan }) {
           {plan.includes.map((line) => (
             <li key={line} className="flex gap-2 text-sm">
               <Check
-                className="mt-0.5 size-4 shrink-0 text-primary"
+                className="mt-0.5 size-4 shrink-0 text-accent"
                 aria-hidden="true"
               />
               <span className="text-text-muted">{line}</span>
@@ -221,7 +221,7 @@ export function PlanComparison({ audience }: { audience: Audience }) {
                   <td key={plan.id} className="px-3 py-3 text-center">
                     {has ? (
                       <Check
-                        className="mx-auto size-4 text-primary"
+                        className="mx-auto size-4 text-accent"
                         aria-label="Included"
                       />
                     ) : (

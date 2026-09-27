@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { saveAppearance } from "@/app/settings/actions";
 import { Button } from "@/components/ui/button";
+import { setThemePreference, useThemePreference } from "@/components/theme-provider";
 import {
   LARGE_TEXT_STORAGE_KEY,
   THEME_STORAGE_KEY,
@@ -11,8 +12,8 @@ import {
 } from "@/lib/theme";
 
 const OPTIONS: { value: ThemePreference; label: string; hint: string }[] = [
-  { value: "dark", label: "Dark", hint: "Default. Built for night shifts." },
-  { value: "light", label: "Light", hint: "Daylight and bright lobbies." },
+  { value: "dark", label: "Dark", hint: "Default. Black glass with burgundy accents." },
+  { value: "light", label: "Light", hint: "White and black. Clear in daylight." },
   { value: "system", label: "System", hint: "Follow the phone." },
 ];
 
@@ -27,50 +28,40 @@ const OPTIONS: { value: ThemePreference; label: string; hint: string }[] = [
 export function AppearanceSettings({
   theme,
   largeText,
+  saveToAccount = true,
 }: {
   theme: ThemePreference;
   largeText: boolean;
+  saveToAccount?: boolean;
 }) {
-  const [current, setCurrent] = React.useState<ThemePreference>(theme);
+  const { preference: current } = useThemePreference();
   const [large, setLarge] = React.useState(largeText);
   const [error, setError] = React.useState<string | null>(null);
 
-  /**
-   * The document is mutated here, not in the click handler.
-   *
-   * `<html>` is outside React's tree, so writing to it during an event is a
-   * side effect on something the component does not own — the compiler's
-   * immutability rule catches exactly that. Doing it in an effect keyed on
-   * state also makes the DOM follow state rather than the other way round, so
-   * the two cannot drift if a save later fails and we roll `current` back.
-   */
   React.useEffect(() => {
-    const resolved =
-      current === "system"
-        ? window.matchMedia("(prefers-color-scheme: light)").matches
-          ? "light"
-          : "dark"
-        : current;
-    const root = document.documentElement;
-    root.classList.remove("theme-dark", "theme-light");
-    root.classList.add(`theme-${resolved}`);
-    root.style.colorScheme = resolved;
-    root.classList.toggle("text-larger", large);
     try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, current);
+      if (!window.localStorage.getItem(THEME_STORAGE_KEY)) setThemePreference(theme);
+    } catch {
+      // Keep the current session choice when storage is unavailable.
+    }
+  }, [theme]);
+
+  React.useEffect(() => {
+    document.documentElement.classList.toggle("text-larger", large);
+    try {
       window.localStorage.setItem(LARGE_TEXT_STORAGE_KEY, large ? "1" : "0");
     } catch {
-      // Private mode. The server value still applies for this session, and
-      // the next cold open falls back to the default rather than breaking.
+      // Larger text remains active for this session.
     }
-  }, [current, large]);
+  }, [large]);
 
   async function persist(next: ThemePreference, nextLarge: boolean) {
     // State first: the effect above repaints from it, so the screen changes
     // on the tap rather than after the round trip. A guard in a bright lobby
     // should not watch a spinner to find out whether the theme took.
-    setCurrent(next);
+    setThemePreference(next);
     setLarge(nextLarge);
+    if (!saveToAccount) return;
     const result = await saveAppearance(next.toUpperCase(), nextLarge);
     setError(result.error);
   }
@@ -84,7 +75,7 @@ export function AppearanceSettings({
             <Button
               key={option.value}
               type="button"
-              variant={current === option.value ? "primary" : "secondary"}
+              variant={current === option.value ? "primary" : "ghost"}
               onClick={() => void persist(option.value, large)}
               aria-pressed={current === option.value}
               data-theme-option={option.value}

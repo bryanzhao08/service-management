@@ -22,7 +22,7 @@ const STATE_ICON: Record<TrackerState, React.ElementType> = {
 
 const STATE_STYLE: Record<TrackerState, string> = {
   pending: "text-text-muted border-border",
-  active: "text-primary border-primary",
+  active: "text-accent border-primary",
   done: "text-on-primary bg-primary border-transparent",
   failed: "text-on-danger bg-danger border-transparent",
 };

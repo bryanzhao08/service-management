@@ -10,7 +10,7 @@ const config: CapacitorConfig = {
   appId: "com.transientapp.guard",
   appName: "Transient",
   webDir: "mobile/www",
-  backgroundColor: "#030701",
+  backgroundColor: "#000000",
   appendUserAgent: " TransientNative/1.0",
   loggingBehavior: "debug",
   server,

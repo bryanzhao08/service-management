@@ -12,93 +12,80 @@
  *   pnpm contrast --check  # verify only, no writes (CI)
  */
 
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** The ten permitted colors (section 6.1), plus white for light surfaces. */
-const PALETTE = {
-  ink: "#030701",
-  cream: "#f7ffd7",
-  lime: "#76d337",
-  forest: "#116906",
-  olive: "#76862d",
-  ember: "#df6d1c",
-  bark: "#322f27",
-  khaki: "#aeaa79",
-  copper: "#996227",
-  slate: "#4a555d",
-  white: "#ffffff",
-};
+// Read the actual primitive and semantic tokens: the gate must follow the UI.
+const css = readFileSync(join(ROOT, "src/app/globals.css"), "utf8");
+function declarations(block) {
+  return Object.fromEntries(
+    [...block.matchAll(/--([\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]),
+  );
+}
+const primitives = declarations(
+  css.slice(css.indexOf("@theme {"), css.indexOf(":root,")),
+);
+const PALETTE = Object.fromEntries(
+  ["dark", "light"].map((mode) => {
+    const block = css.match(new RegExp(`\\.theme-${mode} \\{([^}]+)`))?.[1];
+    if (!block) throw new Error(`Missing ${mode} theme`);
+    return [mode, { ...primitives, ...declarations(block) }];
+  }),
+);
+// Worst-case backgrounds through the chosen material: dark over white,
+// light over black. Dark tint 92%, light tint 94% (globals.css).
+PALETTE.dark.glass = "#2a2628";
+PALETTE.light.glass = "#f0f0f0";
+PALETTE.pdf = { text: "#000000", bg: "#ffffff" };
 
-/**
- * Required ratios, WCAG 2.2.
- * - normal text        4.5:1  (1.4.3)
- * - large text         3.0:1  (>= 24px, or >= 19px bold)
- * - non-text UI        3.0:1  (1.4.11 - borders that convey state, focus rings)
- * - decorative         none   (dividers and outlines that carry no meaning)
- */
 const FLOOR = { text: 4.5, large: 3, ui: 3, decorative: 0 };
+const PAIRINGS = [];
+for (const mode of ["dark", "light"]) {
+  for (const background of ["bg", "surface", "surface-raised", "glass"]) {
+    for (const foreground of ["text", "text-muted", "accent", "attention", "danger"]) {
+      PAIRINGS.push([
+        mode,
+        `${foreground} on ${background}`,
+        foreground,
+        background,
+        "text",
+      ]);
+    }
+    PAIRINGS.push([
+      mode,
+      `focus ring on ${background}`,
+      "focus-ring",
+      background,
+      "ui",
+    ]);
+    PAIRINGS.push([
+      mode,
+      `control outline on ${background}`,
+      "border",
+      background,
+      "ui",
+    ]);
+  }
+  for (const fill of [
+    "primary",
+    "primary-pressed",
+    "secondary",
+    "attention",
+    "danger",
+  ]) {
+    PAIRINGS.push([mode, `${fill} label`, `on-${fill}`, fill, "text"]);
+  }
+}
+PAIRINGS.push(["pdf", "printed body and headings", "text", "bg", "text"]);
 
-/**
- * Every pairing the product uses. Adding a pairing to the app means adding it
- * here; the build fails otherwise, which is the point.
- */
-const PAIRINGS = [
-  // --- Dark theme (default) ---
-  ["dark", "body text", "cream", "ink", "text"],
-  ["dark", "body text on a card", "cream", "bark", "text"],
-  ["dark", "muted text (timestamps, labels)", "khaki", "ink", "text"],
-  ["dark", "muted text on a card", "khaki", "bark", "text"],
-  ["dark", "primary button label", "ink", "lime", "text"],
-  ["dark", "primary button pressed", "cream", "forest", "text"],
-  ["dark", "secondary button label", "ink", "olive", "text"],
-  ["dark", "attention text (warnings)", "ember", "ink", "text"],
-  ["dark", "attention fill (incident chip)", "ink", "ember", "text"],
-  ["dark", "danger fill (bounced chip)", "cream", "copper", "text"],
-  ["dark", "focus ring against page", "lime", "ink", "ui"],
-  ["dark", "focus ring against a card", "lime", "bark", "ui"],
-  ["dark", "primary as a status dot on page", "lime", "ink", "ui"],
-  ["dark", "card edge against page", "bark", "ink", "decorative"],
-  ["dark", "divider / outline", "slate", "ink", "decorative"],
-
-  // --- Light theme ---
-  ["light", "body text", "ink", "cream", "text"],
-  ["light", "body text on a surface", "ink", "white", "text"],
-  ["light", "muted text", "slate", "cream", "text"],
-  ["light", "muted text on a surface", "slate", "white", "text"],
-  ["light", "primary button label", "cream", "forest", "text"],
-  ["light", "primary link on page", "forest", "cream", "text"],
-  ["light", "primary link on a surface", "forest", "white", "text"],
-  ["light", "primary pressed", "cream", "ink", "text"],
-  ["light", "secondary button label", "ink", "olive", "text"],
-  ["light", "accent fill (lime badge)", "ink", "lime", "text"],
-  ["light", "attention fill", "ink", "ember", "text"],
-  ["light", "attention text, large only", "ember", "cream", "large"],
-  ["light", "danger text", "copper", "cream", "text"],
-  ["light", "danger fill", "cream", "copper", "text"],
-  ["light", "focus ring against page", "forest", "cream", "ui"],
-  ["light", "focus ring against a surface", "forest", "white", "ui"],
-  ["light", "divider / outline", "khaki", "cream", "decorative"],
-
-  // --- PDF (section 11: always light, never the dark theme) ---
-  ["pdf", "body text", "ink", "white", "text"],
-  ["pdf", "section heading", "forest", "white", "text"],
-  ["pdf", "severity marker", "ember", "white", "large"],
-];
-
-/**
- * Pairings deliberately forbidden. Asserting these FAIL is the negative
- * control: if a future refactor made the math permissive, these would start
- * passing and the script would catch it.
- */
+// Negative controls make a broken/permissive luminance calculation fail.
 const MUST_FAIL = [
-  ["lime text on cream", "lime", "cream", "text"],
-  ["copper text on ink", "copper", "ink", "text"],
-  ["slate text on ink", "slate", "ink", "text"],
-  ["khaki text on cream", "khaki", "cream", "text"],
+  ["white text on white", "#ffffff", "#ffffff", "text"],
+  ["burgundy text on black", "#941e42", "#000000", "text"],
+  ["light gray text on white", "#bcb5b8", "#ffffff", "text"],
 ];
 
 function hexToRgb(hex) {
@@ -126,10 +113,15 @@ export function contrastRatio(hexA, hexB) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-function resolve(name) {
-  const hex = PALETTE[name];
-  if (!hex) throw new Error(`Unknown color token: ${name}`);
-  return hex;
+function resolve(name, mode) {
+  if (name.startsWith("#")) return name;
+  const value = PALETTE[mode]?.[name];
+  if (!value) throw new Error(`Unknown ${mode} token ${name}`);
+  const alias = value.match(/^var\(--([\w-]+)\)$/);
+  if (alias) return resolve(alias[1], mode);
+  if (!/^#[0-9a-f]{6}$/i.test(value))
+    throw new Error(`Expected hex token, got ${name}: ${value}`);
+  return value;
 }
 
 function main() {
@@ -138,7 +130,7 @@ function main() {
   const failures = [];
 
   for (const [theme, use, fg, bg, kind] of PAIRINGS) {
-    const ratio = contrastRatio(resolve(fg), resolve(bg));
+    const ratio = contrastRatio(resolve(fg, theme), resolve(bg, theme));
     const floor = FLOOR[kind];
     const pass = ratio >= floor;
     if (!pass) {
@@ -152,7 +144,7 @@ function main() {
   // Negative control: these must be below their floor.
   const controlFailures = [];
   for (const [label, fg, bg, kind] of MUST_FAIL) {
-    const ratio = contrastRatio(resolve(fg), resolve(bg));
+    const ratio = contrastRatio(resolve(fg, "dark"), resolve(bg, "dark"));
     if (ratio >= FLOOR[kind]) {
       controlFailures.push(
         `${label} should be below ${FLOOR[kind]}:1 but measured ${ratio.toFixed(2)}:1`,
@@ -200,7 +192,7 @@ record rather than an oversight.
   md += `build would fail instead of silently approving everything.\n\n`;
   md += `| Pairing | Ratio | Floor | Below floor |\n|---|---|---|---|\n`;
   for (const [label, fg, bg, kind] of MUST_FAIL) {
-    const ratio = contrastRatio(resolve(fg), resolve(bg));
+    const ratio = contrastRatio(resolve(fg, "dark"), resolve(bg, "dark"));
     md += `| ${label} | ${ratio.toFixed(2)}:1 | ${FLOOR[kind]}:1 | ${ratio < FLOOR[kind] ? "yes" : "**NO**"} |\n`;
   }
   md += `\n`;

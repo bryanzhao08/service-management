@@ -83,7 +83,7 @@ export function PushPrompt({ publicKey }: { publicKey: string | null }) {
       data-push-prompt="asking"
     >
       <div className="flex items-start gap-3">
-        <Bell className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
+        <Bell className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden="true" />
         <div className="min-w-0">
           <p className="font-medium text-text">
             Want to know when it&rsquo;s delivered?

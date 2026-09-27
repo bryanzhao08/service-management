@@ -60,7 +60,7 @@ export const BottomSheet = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed inset-x-0 bottom-0 z-50 flex max-h-[90dvh] flex-col border-border bg-surface",
+          "glass glass-sheet fixed inset-x-0 bottom-0 z-50 flex max-h-[90dvh] flex-col border-border",
           "rounded-t-[var(--radius-sheet)] border-t",
           "data-[state=closed]:animate-slide-down data-[state=open]:animate-slide-up",
           className,
@@ -121,7 +121,7 @@ export const Dialog = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "elevation fixed top-1/2 left-1/2 z-50 flex w-[calc(100vw-2rem)] max-w-md border-border bg-surface",
+          "glass glass-sheet fixed top-1/2 left-1/2 z-50 flex w-[calc(100vw-2rem)] max-w-md border-border",
           "max-h-[85dvh] -translate-x-1/2 -translate-y-1/2 flex-col rounded-[var(--radius-sheet)] border",
           "data-[state=closed]:animate-fade-out data-[state=open]:animate-fade-in",
           className,

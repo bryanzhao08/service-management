@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Wordmark } from "@/components/brand";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
  * Shared shell for sign-in, verify and PIN. Centred, single column, nothing
@@ -9,7 +10,7 @@ import { Wordmark } from "@/components/brand";
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col bg-bg">
-      <header className="flex items-center justify-center px-6 pt-10 pb-2">
+      <header className="pt-safe mx-auto flex w-full max-w-md items-center justify-between gap-3 px-6 pb-8">
         <Link
           href="/"
           aria-label="Transient home"
@@ -19,6 +20,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               own label is set above rather than adding a second announcement. */}
           <Wordmark className="text-2xl" title="" />
         </Link>
+        <ThemeToggle />
       </header>
       <main className="flex flex-1 items-start justify-center px-6 pb-16">
         <div className="w-full max-w-sm">{children}</div>

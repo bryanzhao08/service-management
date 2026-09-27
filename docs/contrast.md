@@ -14,51 +14,83 @@ record rather than an oversight.
 
 | Use | Foreground | Background | Ratio | Floor | Result |
 |---|---|---|---|---|---|
-| body text | `cream` | `ink` | 19.56:1 | 4.5:1 | pass |
-| body text on a card | `cream` | `bark` | 12.88:1 | 4.5:1 | pass |
-| muted text (timestamps, labels) | `khaki` | `ink` | 8.53:1 | 4.5:1 | pass |
-| muted text on a card | `khaki` | `bark` | 5.62:1 | 4.5:1 | pass |
-| primary button label | `ink` | `lime` | 10.77:1 | 4.5:1 | pass |
-| primary button pressed | `cream` | `forest` | 6.64:1 | 4.5:1 | pass |
-| secondary button label | `ink` | `olive` | 5.04:1 | 4.5:1 | pass |
-| attention text (warnings) | `ember` | `ink` | 6.13:1 | 4.5:1 | pass |
-| attention fill (incident chip) | `ink` | `ember` | 6.13:1 | 4.5:1 | pass |
-| danger fill (bounced chip) | `cream` | `copper` | 4.90:1 | 4.5:1 | pass |
-| focus ring against page | `lime` | `ink` | 10.77:1 | 3:1 | pass |
-| focus ring against a card | `lime` | `bark` | 7.09:1 | 3:1 | pass |
-| primary as a status dot on page | `lime` | `ink` | 10.77:1 | 3:1 | pass |
-| card edge against page | `bark` | `ink` | 1.52:1 | n/a | decorative |
-| divider / outline | `slate` | `ink` | 2.66:1 | n/a | decorative |
+| text on bg | `text` | `bg` | 21.00:1 | 4.5:1 | pass |
+| text-muted on bg | `text-muted` | `bg` | 10.44:1 | 4.5:1 | pass |
+| accent on bg | `accent` | `bg` | 10.30:1 | 4.5:1 | pass |
+| attention on bg | `attention` | `bg` | 10.30:1 | 4.5:1 | pass |
+| danger on bg | `danger` | `bg` | 12.97:1 | 4.5:1 | pass |
+| focus ring on bg | `focus-ring` | `bg` | 10.30:1 | 3:1 | pass |
+| control outline on bg | `border` | `bg` | 4.93:1 | 3:1 | pass |
+| text on surface | `text` | `surface` | 18.41:1 | 4.5:1 | pass |
+| text-muted on surface | `text-muted` | `surface` | 9.15:1 | 4.5:1 | pass |
+| accent on surface | `accent` | `surface` | 9.03:1 | 4.5:1 | pass |
+| attention on surface | `attention` | `surface` | 9.03:1 | 4.5:1 | pass |
+| danger on surface | `danger` | `surface` | 11.37:1 | 4.5:1 | pass |
+| focus ring on surface | `focus-ring` | `surface` | 9.03:1 | 3:1 | pass |
+| control outline on surface | `border` | `surface` | 4.32:1 | 3:1 | pass |
+| text on surface-raised | `text` | `surface-raised` | 16.83:1 | 4.5:1 | pass |
+| text-muted on surface-raised | `text-muted` | `surface-raised` | 8.37:1 | 4.5:1 | pass |
+| accent on surface-raised | `accent` | `surface-raised` | 8.25:1 | 4.5:1 | pass |
+| attention on surface-raised | `attention` | `surface-raised` | 8.25:1 | 4.5:1 | pass |
+| danger on surface-raised | `danger` | `surface-raised` | 10.39:1 | 4.5:1 | pass |
+| focus ring on surface-raised | `focus-ring` | `surface-raised` | 8.25:1 | 3:1 | pass |
+| control outline on surface-raised | `border` | `surface-raised` | 3.95:1 | 3:1 | pass |
+| text on glass | `text` | `glass` | 14.93:1 | 4.5:1 | pass |
+| text-muted on glass | `text-muted` | `glass` | 7.42:1 | 4.5:1 | pass |
+| accent on glass | `accent` | `glass` | 7.32:1 | 4.5:1 | pass |
+| attention on glass | `attention` | `glass` | 7.32:1 | 4.5:1 | pass |
+| danger on glass | `danger` | `glass` | 9.22:1 | 4.5:1 | pass |
+| focus ring on glass | `focus-ring` | `glass` | 7.32:1 | 3:1 | pass |
+| control outline on glass | `border` | `glass` | 3.51:1 | 3:1 | pass |
+| primary label | `on-primary` | `primary` | 8.32:1 | 4.5:1 | pass |
+| primary-pressed label | `on-primary-pressed` | `primary-pressed` | 16.08:1 | 4.5:1 | pass |
+| secondary label | `on-secondary` | `secondary` | 14.49:1 | 4.5:1 | pass |
+| attention label | `on-attention` | `attention` | 10.30:1 | 4.5:1 | pass |
+| danger label | `on-danger` | `danger` | 12.97:1 | 4.5:1 | pass |
 
 ## Light theme
 
 | Use | Foreground | Background | Ratio | Floor | Result |
 |---|---|---|---|---|---|
-| body text | `ink` | `cream` | 19.56:1 | 4.5:1 | pass |
-| body text on a surface | `ink` | `white` | 20.30:1 | 4.5:1 | pass |
-| muted text | `slate` | `cream` | 7.36:1 | 4.5:1 | pass |
-| muted text on a surface | `slate` | `white` | 7.64:1 | 4.5:1 | pass |
-| primary button label | `cream` | `forest` | 6.64:1 | 4.5:1 | pass |
-| primary link on page | `forest` | `cream` | 6.64:1 | 4.5:1 | pass |
-| primary link on a surface | `forest` | `white` | 6.89:1 | 4.5:1 | pass |
-| primary pressed | `cream` | `ink` | 19.56:1 | 4.5:1 | pass |
-| secondary button label | `ink` | `olive` | 5.04:1 | 4.5:1 | pass |
-| accent fill (lime badge) | `ink` | `lime` | 10.77:1 | 4.5:1 | pass |
-| attention fill | `ink` | `ember` | 6.13:1 | 4.5:1 | pass |
-| attention text, large only | `ember` | `cream` | 3.19:1 | 3:1 | pass |
-| danger text | `copper` | `cream` | 4.90:1 | 4.5:1 | pass |
-| danger fill | `cream` | `copper` | 4.90:1 | 4.5:1 | pass |
-| focus ring against page | `forest` | `cream` | 6.64:1 | 3:1 | pass |
-| focus ring against a surface | `forest` | `white` | 6.89:1 | 3:1 | pass |
-| divider / outline | `khaki` | `cream` | 2.29:1 | n/a | decorative |
+| text on bg | `text` | `bg` | 21.00:1 | 4.5:1 | pass |
+| text-muted on bg | `text-muted` | `bg` | 7.00:1 | 4.5:1 | pass |
+| accent on bg | `accent` | `bg` | 21.00:1 | 4.5:1 | pass |
+| attention on bg | `attention` | `bg` | 21.00:1 | 4.5:1 | pass |
+| danger on bg | `danger` | `bg` | 21.00:1 | 4.5:1 | pass |
+| focus ring on bg | `focus-ring` | `bg` | 21.00:1 | 3:1 | pass |
+| control outline on bg | `border` | `bg` | 3.45:1 | 3:1 | pass |
+| text on surface | `text` | `surface` | 19.26:1 | 4.5:1 | pass |
+| text-muted on surface | `text-muted` | `surface` | 6.42:1 | 4.5:1 | pass |
+| accent on surface | `accent` | `surface` | 19.26:1 | 4.5:1 | pass |
+| attention on surface | `attention` | `surface` | 19.26:1 | 4.5:1 | pass |
+| danger on surface | `danger` | `surface` | 19.26:1 | 4.5:1 | pass |
+| focus ring on surface | `focus-ring` | `surface` | 19.26:1 | 3:1 | pass |
+| control outline on surface | `border` | `surface` | 3.17:1 | 3:1 | pass |
+| text on surface-raised | `text` | `surface-raised` | 21.00:1 | 4.5:1 | pass |
+| text-muted on surface-raised | `text-muted` | `surface-raised` | 7.00:1 | 4.5:1 | pass |
+| accent on surface-raised | `accent` | `surface-raised` | 21.00:1 | 4.5:1 | pass |
+| attention on surface-raised | `attention` | `surface-raised` | 21.00:1 | 4.5:1 | pass |
+| danger on surface-raised | `danger` | `surface-raised` | 21.00:1 | 4.5:1 | pass |
+| focus ring on surface-raised | `focus-ring` | `surface-raised` | 21.00:1 | 3:1 | pass |
+| control outline on surface-raised | `border` | `surface-raised` | 3.45:1 | 3:1 | pass |
+| text on glass | `text` | `glass` | 18.43:1 | 4.5:1 | pass |
+| text-muted on glass | `text-muted` | `glass` | 6.15:1 | 4.5:1 | pass |
+| accent on glass | `accent` | `glass` | 18.43:1 | 4.5:1 | pass |
+| attention on glass | `attention` | `glass` | 18.43:1 | 4.5:1 | pass |
+| danger on glass | `danger` | `glass` | 18.43:1 | 4.5:1 | pass |
+| focus ring on glass | `focus-ring` | `glass` | 18.43:1 | 3:1 | pass |
+| control outline on glass | `border` | `glass` | 3.03:1 | 3:1 | pass |
+| primary label | `on-primary` | `primary` | 21.00:1 | 4.5:1 | pass |
+| primary-pressed label | `on-primary-pressed` | `primary-pressed` | 14.55:1 | 4.5:1 | pass |
+| secondary label | `on-secondary` | `secondary` | 17.14:1 | 4.5:1 | pass |
+| attention label | `on-attention` | `attention` | 21.00:1 | 4.5:1 | pass |
+| danger label | `on-danger` | `danger` | 21.00:1 | 4.5:1 | pass |
 
 ## PDF output
 
 | Use | Foreground | Background | Ratio | Floor | Result |
 |---|---|---|---|---|---|
-| body text | `ink` | `white` | 20.30:1 | 4.5:1 | pass |
-| section heading | `forest` | `white` | 6.89:1 | 4.5:1 | pass |
-| severity marker | `ember` | `white` | 3.31:1 | 3:1 | pass |
+| printed body and headings | `text` | `bg` | 21.00:1 | 4.5:1 | pass |
 
 ## Forbidden pairings
 
@@ -68,8 +100,7 @@ build would fail instead of silently approving everything.
 
 | Pairing | Ratio | Floor | Below floor |
 |---|---|---|---|
-| lime text on cream | 1.82:1 | 4.5:1 | yes |
-| copper text on ink | 3.99:1 | 4.5:1 | yes |
-| slate text on ink | 2.66:1 | 4.5:1 | yes |
-| khaki text on cream | 2.29:1 | 4.5:1 | yes |
+| white text on white | 1.00:1 | 4.5:1 | yes |
+| burgundy text on black | 2.52:1 | 4.5:1 | yes |
+| light gray text on white | 2.01:1 | 4.5:1 | yes |
 

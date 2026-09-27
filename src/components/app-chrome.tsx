@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { AppHeader } from "@/components/app-header";
 
 import { NotificationBell } from "@/components/notification-bell";
 import { OfflineProvider } from "@/components/offline-provider";
@@ -35,23 +35,9 @@ export async function AppChrome() {
   return (
     <>
       <OfflineProvider />
-      <div className="flex items-center justify-between gap-2 px-2 pt-2">
-        <nav aria-label="Main" data-app-nav>
-          <ul className="flex flex-wrap items-center gap-1">
-            {links.map((link) => (
-              <li key={link.href}>
-                <Link
-                  href={link.href}
-                  className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-text-muted hover:bg-surface hover:text-text"
-                >
-                  {link.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
+      <AppHeader links={links}>
         <NotificationBell />
-      </div>
+      </AppHeader>
     </>
   );
 }

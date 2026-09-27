@@ -10,6 +10,8 @@ const native = vi.hoisted(() => ({
   open: vi.fn().mockResolvedValue(undefined),
   minimize: vi.fn(),
   status: vi.fn().mockResolvedValue({ connected: false }),
+  barStyle: vi.fn().mockResolvedValue(undefined),
+  barColor: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@capacitor/core", () => ({
@@ -41,14 +43,15 @@ vi.mock("@capacitor/network", () => ({
   },
 }));
 vi.mock("@capacitor/status-bar", () => ({
-  Style: { Dark: "DARK" },
-  StatusBar: { setStyle: async () => {} },
+  Style: { Dark: "DARK", Light: "LIGHT" },
+  StatusBar: { setStyle: native.barStyle, setBackgroundColor: native.barColor },
 }));
 vi.mock("@capacitor/browser", () => ({ Browser: { open: native.open } }));
 
 beforeEach(() => {
   native.enabled = true;
   native.handlers.clear();
+  document.documentElement.classList.remove("theme-light");
   vi.clearAllMocks();
 });
 
@@ -59,6 +62,18 @@ async function mountNative() {
 }
 
 describe("native lifecycle", () => {
+  it("matches the native bars to the current theme and stops listening after unmount", async () => {
+    const view = await mountNative();
+    expect(native.barStyle).toHaveBeenLastCalledWith({ style: "DARK" });
+    document.documentElement.classList.add("theme-light");
+    window.dispatchEvent(new Event("transient:theme-applied"));
+    expect(native.barStyle).toHaveBeenLastCalledWith({ style: "LIGHT" });
+    expect(native.barColor).toHaveBeenLastCalledWith({ color: "#ffffff" });
+    view.unmount();
+    native.barStyle.mockClear();
+    window.dispatchEvent(new Event("transient:theme-applied"));
+    expect(native.barStyle).not.toHaveBeenCalled();
+  });
   it("leaves browser sessions alone", async () => {
     native.enabled = false;
     render(<NativeProvider />);

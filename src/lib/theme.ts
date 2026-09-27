@@ -13,7 +13,7 @@ export function isThemePreference(value: unknown): value is ThemePreference {
  *
  * The class has to be on <html> before the browser paints or the guard gets a
  * flash of the wrong theme — which on a phone at 4 AM means a full-screen
- * flash of cream. Kept as a string so it ships as a synchronous inline script
+ * flash of white. Kept as a string so it ships as a synchronous inline script
  * rather than a hydration-time effect.
  */
 export const themeInitScript = `
@@ -28,6 +28,8 @@ export const themeInitScript = `
     root.classList.remove("theme-dark", "theme-light");
     root.classList.add("theme-" + resolved);
     root.style.colorScheme = resolved;
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", resolved === "light" ? "#ffffff" : "#000000");
     if (localStorage.getItem(${JSON.stringify(LARGE_TEXT_STORAGE_KEY)}) === "1") {
       root.classList.add("text-larger");
     }

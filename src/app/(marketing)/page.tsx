@@ -260,7 +260,7 @@ export default function HomePage() {
               <li key={problem.title}>
                 <Card className="h-full">
                   <CardContent className="flex flex-col gap-2 py-6">
-                    <h3 className="font-medium text-primary">{problem.title}</h3>
+                    <h3 className="font-medium text-accent">{problem.title}</h3>
                     <p className="text-sm text-text-muted">{problem.body}</p>
                   </CardContent>
                 </Card>
@@ -280,7 +280,7 @@ export default function HomePage() {
               <li key={audience.title}>
                 <Card className="h-full">
                   <CardContent className="flex h-full flex-col gap-3 py-6">
-                    <h3 className="font-medium text-primary">{audience.title}</h3>
+                    <h3 className="font-medium text-accent">{audience.title}</h3>
                     <p className="text-sm text-text-muted">{audience.who}</p>
                     <p className="text-sm text-text-muted">{audience.body}</p>
                     <p className="mt-auto pt-2 text-sm font-medium">
@@ -323,7 +323,7 @@ export default function HomePage() {
               <li key={feature.title}>
                 <Card className="h-full">
                   <CardHeader className="gap-3">
-                    <feature.icon className="size-5 text-primary" aria-hidden="true" />
+                    <feature.icon className="size-5 text-accent" aria-hidden="true" />
                     <CardTitle className="text-base">{feature.title}</CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -361,10 +361,7 @@ export default function HomePage() {
                 key={item.label}
                 className="flex items-center gap-3 rounded-[var(--radius-card)] border border-border bg-surface px-4 py-4"
               >
-                <item.icon
-                  className="size-5 shrink-0 text-primary"
-                  aria-hidden="true"
-                />
+                <item.icon className="size-5 shrink-0 text-accent" aria-hidden="true" />
                 <span className="text-sm font-medium">{item.label}</span>
               </li>
             ))}
@@ -394,7 +391,7 @@ export default function HomePage() {
               {ALWAYS_INCLUDED.map((line) => (
                 <li key={line} className="flex gap-2 text-sm text-text-muted">
                   <Minus
-                    className="mt-0.5 size-4 shrink-0 text-primary"
+                    className="mt-0.5 size-4 shrink-0 text-accent"
                     aria-hidden="true"
                   />
                   <span>{line}</span>
@@ -420,21 +417,21 @@ export default function HomePage() {
             <ul className="flex flex-col gap-3 text-sm text-text-muted">
               <li className="flex gap-2">
                 <MapPin
-                  className="mt-0.5 size-4 shrink-0 text-primary"
+                  className="mt-0.5 size-4 shrink-0 text-accent"
                   aria-hidden="true"
                 />
                 {`From $${OPERATOR_FROM.price} a ${OPERATOR_FROM.unit} for guard companies, $${CLIENT_FROM.price} a ${CLIENT_FROM.unit} for the people who hire them. Unlimited guards either way.`}
               </li>
               <li className="flex gap-2">
                 <Mail
-                  className="mt-0.5 size-4 shrink-0 text-primary"
+                  className="mt-0.5 size-4 shrink-0 text-accent"
                   aria-hidden="true"
                 />
                 Unlimited report recipients. They never need an account.
               </li>
               <li className="flex gap-2">
                 <ScrollText
-                  className="mt-0.5 size-4 shrink-0 text-primary"
+                  className="mt-0.5 size-4 shrink-0 text-accent"
                   aria-hidden="true"
                 />
                 Your reports and photos stay yours. Export any time, including after you

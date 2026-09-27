@@ -16,7 +16,7 @@ import {
 import type { Severity } from "@/generated/prisma/enums";
 
 import type { EmailMessage } from "./provider";
-import { BARK, COPPER, CREAM, EMBER, INK, LIME, MUTED } from "./templates";
+import { BARK, COPPER, CREAM, EMBER, INK, ACCENT, MUTED } from "./templates";
 
 /**
  * The report email (section 12).
@@ -194,7 +194,7 @@ function ReportEmail(params: ReportEmailParams) {
               href={pdfUrl}
               style={{
                 display: "inline-block",
-                background: LIME,
+                background: ACCENT,
                 color: INK,
                 textDecoration: "none",
                 fontWeight: 700,

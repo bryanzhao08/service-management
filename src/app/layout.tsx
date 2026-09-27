@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 
 import { NativeProvider } from "@/components/native-provider";
+import { ThemeProvider } from "@/components/theme-provider";
 import { themeInitScript } from "@/lib/theme";
 
 import "./globals.css";
@@ -47,7 +48,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#030701",
+  themeColor: "#000000",
 };
 
 export default function RootLayout({
@@ -61,6 +62,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-dvh bg-bg text-text antialiased">
+        <ThemeProvider />
         <NativeProvider />
         {children}
       </body>

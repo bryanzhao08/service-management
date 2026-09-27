@@ -12,9 +12,9 @@ import { cn } from "@/lib/utils";
  * the bottom bar, which a tired guard hits one-handed in the dark.
  */
 const SIZES = {
-  md: "min-h-tap px-4 text-[15px] gap-2 rounded-[var(--radius-card)]",
-  lg: "min-h-[56px] px-5 text-base gap-2.5 rounded-[var(--radius-card)]",
-  xl: "min-h-[64px] px-6 text-lg font-semibold gap-3 rounded-[var(--radius-card)]",
+  md: "min-h-tap px-4 text-[15px] gap-2 rounded-[var(--radius-control)]",
+  lg: "min-h-[56px] px-5 text-base gap-2.5 rounded-[var(--radius-control)]",
+  xl: "min-h-[64px] px-6 text-lg font-semibold gap-3 rounded-[var(--radius-control)]",
 } as const;
 
 /**
@@ -70,7 +70,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
       aria-disabled={disabled || busy || undefined}
       disabled={asChild ? undefined : disabled || busy}
       className={cn(
-        "relative inline-flex items-center justify-center font-medium",
+        "app-button relative inline-flex items-center justify-center font-medium",
         "transition-[background-color,color,filter] duration-150 ease-out",
         "disabled:pointer-events-none disabled:opacity-50",
         "select-none",

@@ -1,3 +1,6 @@
+import { Mark } from "@/components/brand-mark";
+export { Mark } from "@/components/brand-mark";
+
 import { cn } from "@/lib/utils";
 
 /**
@@ -41,7 +44,7 @@ export function Wordmark({
       )}
     >
       <span aria-hidden="true">trans</span>
-      {/* U+0131 dotless i, so the lime dot below is the only tittle. */}
+      {/* U+0131 dotless i, so the accent dot below is the only tittle. */}
       <span aria-hidden="true" className="relative inline-block">
         &#x0131;
         {/*
@@ -60,46 +63,6 @@ export function Wordmark({
       </span>
       <span aria-hidden="true">ent</span>
     </span>
-  );
-}
-
-/**
- * The standalone mark: the tittle inside a rounded square. Used for the PWA
- * icon, the favicon, and the PDF header. No gradients (section 6.4).
- *
- * `inverted` swaps to a light plate with a forest dot, for use on dark
- * backgrounds that are not `ink` — for example inside the printed PDF.
- */
-export function Mark({
-  className,
-  inverted = false,
-  title = "Transient",
-}: {
-  className?: string;
-  inverted?: boolean;
-  title?: string;
-}) {
-  const plate = inverted ? "#f7ffd7" : "#030701";
-  const dot = inverted ? "#116906" : "#76d337";
-
-  // An empty title means decorative — the mark is sitting next to the wordmark,
-  // which already carries the name. Rendering `role="img" aria-label=""` in
-  // that case produces an UNNAMED image, which a screen reader announces as a
-  // bare "image" and which axe's svg-img-alt flags. Decorative means removing
-  // it from the tree entirely, not naming it with an empty string.
-  const decorative = title === "";
-
-  return (
-    <svg
-      viewBox="0 0 64 64"
-      {...(decorative
-        ? { "aria-hidden": true as const, focusable: false }
-        : { role: "img", "aria-label": title })}
-      className={cn("h-8 w-8", className)}
-    >
-      <rect width="64" height="64" rx="15" fill={plate} />
-      <circle cx="32" cy="32" r="13" fill={dot} />
-    </svg>
   );
 }
 

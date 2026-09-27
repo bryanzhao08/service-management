@@ -516,7 +516,7 @@ function GenerateStep({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Check className="size-5 text-primary" aria-hidden="true" />
+            <Check className="size-5 text-accent" aria-hidden="true" />
             Report v{report.version} is ready
           </CardTitle>
         </CardHeader>
@@ -740,7 +740,7 @@ function ClockOutStep({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Check className="size-5 text-primary" aria-hidden="true" />
+            <Check className="size-5 text-accent" aria-hidden="true" />
             You&rsquo;re clocked out
           </CardTitle>
         </CardHeader>

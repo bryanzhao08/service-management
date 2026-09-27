@@ -39,7 +39,7 @@ export function useToast(): ToastContextValue {
 
 const TONE_STYLE: Record<ToastTone, { icon: React.ElementType; className: string }> = {
   info: { icon: Info, className: "text-text-muted" },
-  success: { icon: CheckCircle2, className: "text-primary" },
+  success: { icon: CheckCircle2, className: "text-accent" },
   attention: { icon: AlertTriangle, className: "text-attention" },
   danger: { icon: XCircle, className: "text-danger" },
 };
@@ -111,7 +111,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 <ToastPrimitive.Action
                   altText={item.action.label}
                   onClick={item.action.onClick}
-                  className="shrink-0 px-2 py-1 text-sm font-semibold text-primary"
+                  className="shrink-0 px-2 py-1 text-sm font-semibold text-accent"
                 >
                   {item.action.label}
                 </ToastPrimitive.Action>

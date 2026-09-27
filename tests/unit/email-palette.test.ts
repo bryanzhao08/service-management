@@ -41,7 +41,7 @@ describe("email palette", () => {
     // Control. If the regex silently stopped matching, every assertion below
     // would compare undefined to undefined and pass while proving nothing.
     expect(token("color-ink")).toMatch(/^#[0-9a-f]{6}$/);
-    expect(token("color-lime")).not.toEqual(token("color-ink"));
+    expect(token("color-rose")).not.toEqual(token("color-ink"));
   });
 
   it("finds hexes in the email templates", () => {
@@ -52,18 +52,18 @@ describe("email palette", () => {
     const known = new Set(
       [
         "color-ink",
-        "color-cream",
-        "color-lime",
-        "color-forest",
+        "color-paper",
+        "color-rose",
+        "color-burgundy",
         // Metadata lines and ungraded incidents. Muted, but still a token:
         // the point of this list is that the email cannot mix its own shade.
-        "color-khaki",
+        "color-ash",
         // Incident severity. The colour only reinforces the level; the label
         // next to it always spells it out, so a reader who cannot tell copper
         // from ember still gets the grade.
-        "color-bark",
-        "color-ember",
-        "color-copper",
+        "color-charcoal",
+        "color-rose",
+        "color-blush",
       ].map(token),
     );
     const unknown = [...templateHexes()].filter((hex) => !known.has(hex));
@@ -80,7 +80,7 @@ describe("email palette", () => {
     // Pins the direction the other test cannot: dropping a colour from the
     // email entirely would leave `unknown` empty and pass.
     const used = templateHexes();
-    for (const name of ["color-ink", "color-lime", "color-cream"]) {
+    for (const name of ["color-ink", "color-rose", "color-paper"]) {
       expect(used, `expected the email to use --${name}`).toContain(token(name));
     }
   });

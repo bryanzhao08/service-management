@@ -7,23 +7,23 @@ import type { EmailMessage } from "./provider";
  * place in the codebase allowed to write a hex value directly, and the values
  * are copied from the `@theme` block in `globals.css`.
  */
-export const INK = "#030701";
-export const CREAM = "#f7ffd7";
-export const LIME = "#76d337";
+export const INK = "#000000";
+export const CREAM = "#ffffff";
+export const ACCENT = "#e8a2b9";
 /** Muted body text. Contrast-checked against INK, not eyeballed. */
-// Must stay equal to `--color-khaki` in globals.css. Email clients cannot read
+// Must stay equal to `--color-ash` in globals.css. Email clients cannot read
 // custom properties, so this literal is a hand-maintained copy and
 // tests/unit/email-palette.test.ts is the only thing keeping the two in step.
-export const MUTED = "#aeaa79";
+export const MUTED = "#bcb5b8";
 
-/** `--color-bark`. Surfaces and hairline dividers on the dark canvas. */
-export const BARK = "#322f27";
+/** `--color-charcoal`. Surfaces and hairline dividers on the dark canvas. */
+export const BARK = "#171315";
 
-/** `--color-ember`. Attention: a graded incident the client should read. */
-export const EMBER = "#df6d1c";
+/** `--color-rose`. Attention: a graded incident the client should read. */
+export const EMBER = "#e8a2b9";
 
-/** `--color-copper`. The worst states the product has: HIGH severity, bounced. */
-export const COPPER = "#996227";
+/** `--color-blush`. The worst states the product has: HIGH severity, bounced. */
+export const COPPER = "#f3bdcd";
 
 function shell(heading: string, body: string): string {
   return `<!doctype html>
@@ -61,11 +61,11 @@ export function magicLinkEmail(params: {
      </p>
      <p style="margin:0 0 24px;">
        <a href="${url}"
-          style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
+          style="display:inline-block;background:${ACCENT};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
          Sign in
        </a>
      </p>
-     ${nativeUrl ? `<p style="margin:0 0 24px;"><a href="${nativeUrl}" style="color:${LIME};">Open in the iPhone / Android app</a></p>` : ""}
+     ${nativeUrl ? `<p style="margin:0 0 24px;"><a href="${nativeUrl}" style="color:${ACCENT};">Open in the iPhone / Android app</a></p>` : ""}
      <p style="margin:0 0 8px;font-size:13px;opacity:0.7;">
        If the button does not work, paste this into your browser:
      </p>
@@ -122,7 +122,7 @@ export function verifyRecipientEmail(params: {
      </p>
      <p style="margin:0 0 24px;">
        <a href="${url}"
-          style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
+          style="display:inline-block;background:${ACCENT};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
          Confirm I receive these reports
        </a>
      </p>

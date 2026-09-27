@@ -113,7 +113,7 @@ export default function PricingPage() {
             {ALWAYS_INCLUDED.map((line) => (
               <li key={line} className="flex gap-2 text-sm">
                 <Minus
-                  className="mt-0.5 size-4 shrink-0 text-primary"
+                  className="mt-0.5 size-4 shrink-0 text-accent"
                   aria-hidden="true"
                 />
                 <span>{line}</span>

@@ -1,40 +1,32 @@
 @import "tailwindcss";
 
-/* ==========================================================================
-   Transient design tokens
-   --------------------------------------------------------------------------
-   Section 6.1 of the spec fixes the palette. These ten colors, plus pure
-   white for light-theme surfaces and black/white at low alpha for shadows
-   and overlays, are the only colors permitted anywhere in the product.
-
-   Every text/background pairing used in the app is enumerated in
-   docs/contrast.md and verified by `pnpm contrast`, which computes the real
-   WCAG 2.2 ratio and exits non-zero if any pairing falls below AA.
-   ========================================================================== */
+/* Transient: black and burgundy at night, monochrome in daylight.
+   Material and motion recipes adapted from the apple-liquid-glass skill.
+   Semantic colors are verified by scripts/contrast.mjs. */
 
 @theme {
-  /* --- Palette (section 6.1) --- */
-  --color-ink: #030701; /* near-black with a green cast; night canvas */
-  --color-cream: #f7ffd7; /* pale lime cream; text on dark, light canvas */
-  --color-lime: #76d337; /* bright signal green; primary action */
-  --color-forest: #116906; /* deep green; pressed, light-theme primary */
-  --color-olive: #76862d; /* muted olive; secondary actions, borders */
-  --color-ember: #df6d1c; /* orange; attention, incidents, warnings */
-  --color-bark: #322f27; /* warm dark gray; cards and surfaces on dark */
-  --color-khaki: #aeaa79; /* muted text, metadata, dividers on dark */
-  --color-copper: #996227; /* burnt brown; destructive, bounced, failed */
-  --color-slate: #4a555d; /* cool gray; borders, disabled, light muted text */
+  --color-ink: #000000;
+  --color-paper: #ffffff;
+  --color-burgundy: #941e42;
+  --color-maroon: #3d1220;
+  --color-charcoal: #171315;
+  --color-ash: #bcb5b8;
+  --color-graphite: #595559;
+  --color-rose: #e8a2b9;
+  --color-blush: #f3bdcd;
 
   /* --- Shape (section 6.3) --- */
-  --radius-card: 12px;
-  --radius-sheet: 16px;
+  --radius-card: 20px;
+  --radius-control: 14px;
+  --radius-sheet: 28px;
   --radius-pill: 999px;
 
   /* --- Type --- */
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, var(--font-inter), ui-sans-serif, sans-serif;
 
   /* --- Motion (section 6.3) --- */
-  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-soft: cubic-bezier(0.23, 1, 0.32, 1);
 
   /* --- Thumb-reach tap targets (principle 1: minimum 48x48) --- */
   --spacing-tap: 48px;
@@ -120,65 +112,64 @@
 :root,
 .theme-dark {
   color-scheme: dark;
-
   --bg: var(--color-ink);
-  --surface: var(--color-bark);
-  --surface-raised: var(--color-bark);
-  --text: var(--color-cream);
-  --text-muted: var(--color-khaki);
-  --border: var(--color-slate);
-
-  --primary: var(--color-lime);
-  --on-primary: var(--color-ink);
-  --primary-pressed: var(--color-forest);
-  --on-primary-pressed: var(--color-cream);
-
-  --secondary: var(--color-olive);
-  --on-secondary: var(--color-ink);
-
-  --attention: var(--color-ember);
+  --surface: var(--color-charcoal);
+  --surface-raised: #231b1f;
+  --text: var(--color-paper);
+  --text-muted: var(--color-ash);
+  --border: #85777d;
+  --primary: var(--color-burgundy);
+  --on-primary: var(--color-paper);
+  --primary-pressed: var(--color-maroon);
+  --on-primary-pressed: var(--color-paper);
+  --accent: var(--color-rose);
+  --secondary: #32262c;
+  --on-secondary: var(--color-paper);
+  --attention: var(--color-rose);
   --on-attention: var(--color-ink);
-
-  --danger: var(--color-copper);
-  --on-danger: var(--color-cream);
-
-  --focus-ring: var(--color-lime);
-
-  /* Elevation on dark is a 1px border, never a shadow (section 6.3). */
-  --elevation: none;
-  --overlay: rgb(3 7 1 / 0.72);
+  --danger: var(--color-blush);
+  --on-danger: var(--color-ink);
+  --focus-ring: var(--color-rose);
+  --elevation: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 4px 16px rgb(0 0 0 / 0.16);
+  --overlay: rgb(0 0 0 / 0.78);
+  --glass: rgb(23 19 21 / 0.92);
+  --glass-thick: rgb(23 19 21 / 0.97);
+  --glass-highlight: rgb(255 255 255 / 0.16);
+  --glass-rim: rgb(255 255 255 / 0.08);
+  --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.28);
+  --glass-selected: #3d1220;
+  --ambient: rgb(148 30 66 / 0.13);
 }
 
 .theme-light {
   color-scheme: light;
-
-  --bg: var(--color-cream);
-  --surface: #ffffff;
-  --surface-raised: #ffffff;
+  --bg: var(--color-paper);
+  --surface: #f5f5f5;
+  --surface-raised: var(--color-paper);
   --text: var(--color-ink);
-  --text-muted: var(--color-slate);
-  --border: var(--color-khaki);
-
-  --primary: var(--color-forest);
-  --on-primary: var(--color-cream);
-  --primary-pressed: var(--color-ink);
-  --on-primary-pressed: var(--color-cream);
-
-  --secondary: var(--color-olive);
+  --text-muted: #595959;
+  --border: #8a8a8a;
+  --primary: var(--color-ink);
+  --on-primary: var(--color-paper);
+  --primary-pressed: #292929;
+  --on-primary-pressed: var(--color-paper);
+  --accent: var(--color-ink);
+  --secondary: #e8e8e8;
   --on-secondary: var(--color-ink);
-
-  --attention: var(--color-ember);
-  --on-attention: var(--color-ink);
-
-  --danger: var(--color-copper);
-  --on-danger: var(--color-cream);
-
-  /* lime on cream is 1.8:1 and fails the 3:1 floor for non-text UI, so the
-     light-theme focus ring is forest. Recorded in ASSUMPTIONS.md. */
-  --focus-ring: var(--color-forest);
-
-  --elevation: 0 1px 2px rgb(3 7 1 / 0.08), 0 4px 12px rgb(3 7 1 / 0.06);
-  --overlay: rgb(3 7 1 / 0.4);
+  --attention: var(--color-ink);
+  --on-attention: var(--color-paper);
+  --danger: var(--color-ink);
+  --on-danger: var(--color-paper);
+  --focus-ring: var(--color-ink);
+  --elevation: inset 0 1px 0 rgb(255 255 255 / 0.8), 0 2px 8px rgb(0 0 0 / 0.04);
+  --overlay: rgb(0 0 0 / 0.48);
+  --glass: rgb(255 255 255 / 0.94);
+  --glass-thick: rgb(255 255 255 / 0.98);
+  --glass-highlight: rgb(255 255 255 / 0.9);
+  --glass-rim: rgb(0 0 0 / 0.08);
+  --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.08);
+  --glass-selected: #e8e8e8;
+  --ambient: transparent;
 }
 
 /* Expose the semantic layer to Tailwind. `inline` keeps the generated
@@ -192,6 +183,7 @@
   --color-text-muted: var(--text-muted);
   --color-border: var(--border);
   --color-primary: var(--primary);
+  --color-accent: var(--accent);
   --color-on-primary: var(--on-primary);
   --color-primary-pressed: var(--primary-pressed);
   --color-on-primary-pressed: var(--on-primary-pressed);
@@ -218,6 +210,13 @@
     background-color: var(--bg);
     color: var(--text);
     font-family: var(--font-sans);
+    font-optical-sizing: auto;
+    background-image: radial-gradient(
+      ellipse at 80% 0%,
+      var(--ambient),
+      transparent 55%
+    );
+    background-attachment: fixed;
     font-size: 16px;
     line-height: 1.5;
     /* Guards work in the dark; never let iOS bounce reveal a white gutter. */
@@ -318,5 +317,95 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Glass belongs to overlapping controls. Data surfaces stay opaque. */
+@layer components {
+  .glass {
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      inset 0 0 0 1px var(--glass-rim),
+      var(--glass-shadow);
+  }
+  .glass-sheet {
+    background: var(--glass-thick);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    backdrop-filter: blur(30px) saturate(180%);
+  }
+  .glass-lens {
+    background: var(--glass-selected);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      inset 0 0 0 1px var(--glass-rim),
+      0 2px 6px rgb(0 0 0 / 0.1);
+  }
+  .app-button {
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+  }
+  .app-button:active {
+    filter: brightness(0.9);
+  }
+  .glass-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    color: var(--accent);
+    background: var(--glass-selected);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      inset 0 0 0 1px var(--glass-rim),
+      0 3px 10px rgb(0 0 0 / 0.12);
+  }
+  .brand-mark {
+    filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.18));
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass,
+  .glass-sheet {
+    background: var(--surface);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass,
+  .glass-sheet {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (prefers-contrast: more) {
+  .glass,
+  .glass-sheet,
+  .glass-lens,
+  .glass-icon {
+    outline: 1px solid var(--text);
+    background: var(--surface);
+  }
+}
+
+@layer components {
+  .glass-control {
+    background: var(--surface);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      inset 0 0 0 1px var(--glass-rim),
+      0 3px 12px rgb(0 0 0 / 0.08);
+  }
+  .shift-focus {
+    background: linear-gradient(135deg, var(--glass-selected), var(--surface) 75%);
+  }
+}
+@media (max-width: 639px) {
+  body:has([data-app-nav]) {
+    padding-bottom: calc(100px + env(safe-area-inset-bottom));
   }
 }

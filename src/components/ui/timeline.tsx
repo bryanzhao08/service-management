@@ -15,7 +15,7 @@ export interface TimelineEntry {
 
 const DOT_TONE = {
   default: "bg-text-muted",
-  primary: "bg-primary",
+  primary: "bg-accent",
   attention: "bg-attention",
   danger: "bg-danger",
 } as const;

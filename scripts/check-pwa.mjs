@@ -114,7 +114,7 @@ async function main() {
     );
     check(
       "theme and background are the spec colour",
-      manifest?.theme_color === "#030701" && manifest?.background_color === "#030701",
+      manifest?.theme_color === "#000000" && manifest?.background_color === "#000000",
       `${manifest?.theme_color} / ${manifest?.background_color}`,
     );
 

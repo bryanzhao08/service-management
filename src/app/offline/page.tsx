@@ -51,7 +51,7 @@ export default function OfflinePage() {
       */}
       <a
         href="/dashboard"
-        className="text-sm font-medium text-primary underline underline-offset-4"
+        className="text-sm font-medium text-accent underline underline-offset-4"
       >
         Try again
       </a>

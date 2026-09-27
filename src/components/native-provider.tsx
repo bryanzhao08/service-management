@@ -32,7 +32,23 @@ export function NativeProvider() {
       await keep(App.addListener("appUrlOpen", ({ url }) => openSignIn(url)));
       const launch = await App.getLaunchUrl();
       if (launch) openSignIn(launch.url);
-      await StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+      const updateStatusBar = () => {
+        const light = document.documentElement.classList.contains("theme-light");
+        void StatusBar.setStyle({ style: light ? Style.Light : Style.Dark }).catch(
+          () => {},
+        );
+        if (Capacitor.getPlatform() === "android") {
+          void StatusBar.setBackgroundColor({
+            color: light ? "#ffffff" : "#000000",
+          }).catch(() => {});
+        }
+      };
+      updateStatusBar();
+      window.addEventListener("transient:theme-applied", updateStatusBar);
+      listeners.push({
+        remove: async () =>
+          window.removeEventListener("transient:theme-applied", updateStatusBar),
+      });
       await keep(
         App.addListener("appStateChange", ({ isActive }) => {
           if (isActive) {

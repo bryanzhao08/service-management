@@ -269,7 +269,7 @@ async function qr(url: string): Promise<string | null> {
       margin: 1,
       width: 256,
       errorCorrectionLevel: "M",
-      color: { dark: "#030701ff", light: "#ffffffff" },
+      color: { dark: "#000000ff", light: "#ffffffff" },
     });
   } catch {
     return null;

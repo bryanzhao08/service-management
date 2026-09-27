@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 64 64"><defs>
+    <linearGradient id="transient-plate" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#3d1220"/><stop offset="0.55" stop-color="#000000"/><stop offset="1" stop-color="#3d1220"/>
+    </linearGradient>
+    <linearGradient id="transient-lens" x1="0.25" y1="0" x2="0.7" y2="1">
+      <stop stop-color="#e8a2b9"/><stop offset="0.45" stop-color="#941e42"/><stop offset="1" stop-color="#3d1220"/>
+    </linearGradient>
+    <linearGradient id="transient-shine" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#ffffff" stop-opacity="0.65"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="0" fill="url(#transient-plate)"/>
+  
+  
+  <circle cx="32" cy="34" r="15" fill="#000000" opacity="0.35"/>
+  <circle cx="32" cy="32" r="14" fill="url(#transient-lens)"/>
+  <circle cx="32" cy="32" r="13.5" fill="none" stroke="#e8a2b9" stroke-opacity="0.6"/>
+  <path d="M20 30C21 17 42 17 44 30C37 25 27 25 20 30Z" fill="url(#transient-shine)"/>
+  <path d="M24 42C28 46 37 46 41 40" fill="none" stroke="#e8a2b9" stroke-opacity="0.35" stroke-width="0.75"/>
+  <path d="M9 11C20 5 44 5 55 11" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="0.75"/></svg>

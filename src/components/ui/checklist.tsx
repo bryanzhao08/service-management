@@ -96,7 +96,7 @@ export function Checklist({
                   }
                   className={cn(
                     "flex size-tap shrink-0 items-center justify-center gap-1 rounded-[var(--radius-card)]",
-                    photoCount > 0 ? "text-primary" : "text-attention",
+                    photoCount > 0 ? "text-accent" : "text-attention",
                   )}
                 >
                   {photoCount > 0 ? (

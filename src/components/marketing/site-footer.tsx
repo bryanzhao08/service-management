@@ -54,7 +54,7 @@ export function SiteFooter({
         </nav>
         {status ? (
           <p className="flex items-center gap-2 text-sm text-text-muted">
-            <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
+            <span aria-hidden="true" className="size-2 rounded-full bg-accent" />
             Status: all systems normal
           </p>
         ) : null}
