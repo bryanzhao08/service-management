@@ -23,6 +23,7 @@ import {
  */
 
 import { queueSampleReport, seedSampleShift } from "./sample-shift";
+import { DEFAULT_ENTRY_TYPES } from "../src/lib/sites/defaults";
 
 const connectionString = process.env["DATABASE_URL"];
 if (!connectionString) {
@@ -32,19 +33,6 @@ if (!connectionString) {
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString }),
 });
-
-/** Incident categories offered as one-tap chips in the quick-incident sheet. */
-const DEFAULT_ENTRY_TYPES = [
-  { key: "transient", label: "Transient / trespass", icon: "user-x", color: "ember" },
-  { key: "intoxicated", label: "Intoxicated guest", icon: "wine", color: "ember" },
-  { key: "noise", label: "Noise complaint", icon: "volume-2", color: "olive" },
-  { key: "dispute", label: "Guest dispute", icon: "users", color: "olive" },
-  { key: "damage", label: "Property damage", icon: "hammer", color: "copper" },
-  { key: "medical", label: "Medical", icon: "heart-pulse", color: "copper" },
-  { key: "suspicious", label: "Suspicious activity", icon: "eye", color: "ember" },
-  { key: "alarm", label: "Alarm", icon: "bell-ring", color: "copper" },
-  { key: "other", label: "Other", icon: "circle-dot", color: "khaki" },
-] as const;
 
 /** Section 11's PDF layout, one entry per section, in render order. */
 const REPORT_SECTIONS = [

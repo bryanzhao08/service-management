@@ -17,6 +17,10 @@
  */
 export const AUDIT_ACTIONS = [
   "auth.sign_in",
+  // The first row a company ever writes: the owner creating the tenant itself.
+  // The actor is the user being created, which is the honest record — nobody
+  // else was involved.
+  "company.create",
   // The only way an account comes into existence outside the seed, so it is
   // the one row that answers "who let this person in".
   "user.invite",
@@ -50,6 +54,7 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Human wording for the viewer. Kept beside the union so one cannot drift. */
 export const AUDIT_LABELS: Record<AuditAction, string> = {
   "auth.sign_in": "Signed in",
+  "company.create": "Created the company",
   "user.invite": "Added someone to the team",
   "shift.start": "Started a shift",
   "shift.end": "Ended a shift",

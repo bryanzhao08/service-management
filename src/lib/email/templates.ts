@@ -70,6 +70,13 @@ export function magicLinkEmail(params: {
   nativeUrl?: string;
 }): EmailMessage {
   const { to, url, expiresInMinutes, nativeUrl } = params;
+  // The callback URL carries a query string, so a bare `&` in HTML is an
+  // unterminated entity rather than a separator. Escaping is what makes the
+  // href parse; the browser unescapes it again on navigation. `text` below
+  // keeps the raw URL, because a mail client shows that verbatim.
+  // `nativeUrl` needs no escaping: nativeSignInLink() runs the callback
+  // through encodeURIComponent, which encodes &, ", < and >.
+  const htmlUrl = escapeHtml(url);
 
   const html = shell(
     "Sign in to Transient",
@@ -78,7 +85,7 @@ export function magicLinkEmail(params: {
        ${expiresInMinutes} minutes.
      </p>
      <p style="margin:0 0 24px;">
-       <a href="${url}"
+       <a href="${htmlUrl}"
           style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
          Sign in
        </a>
@@ -87,7 +94,7 @@ export function magicLinkEmail(params: {
      <p style="margin:0 0 8px;font-size:13px;opacity:0.7;">
        If the button does not work, paste this into your browser:
      </p>
-     <p style="margin:0 0 24px;font-size:13px;word-break:break-all;opacity:0.7;">${url}</p>
+     <p style="margin:0 0 24px;font-size:13px;word-break:break-all;opacity:0.7;">${htmlUrl}</p>
      <p style="margin:0;font-size:13px;opacity:0.7;">
        If you did not ask to sign in, you can ignore this email.
      </p>`,
@@ -125,7 +132,11 @@ export function verifyRecipientEmail(params: {
   companyName: string;
   url: string;
 }): EmailMessage {
-  const { to, name, siteName, companyName, url } = params;
+  const name = escapeHtml(params.name);
+  const siteName = escapeHtml(params.siteName);
+  const companyName = escapeHtml(params.companyName);
+  const { to, url } = params;
+  const htmlUrl = escapeHtml(url);
 
   const html = shell(
     "Do you receive shift reports?",
@@ -139,7 +150,7 @@ export function verifyRecipientEmail(params: {
        create an account and it does not sign you up for anything else.
      </p>
      <p style="margin:0 0 24px;">
-       <a href="${url}"
+       <a href="${htmlUrl}"
           style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
          Confirm I receive these reports
        </a>
@@ -147,7 +158,7 @@ export function verifyRecipientEmail(params: {
      <p style="margin:0 0 8px;font-size:13px;opacity:0.7;">
        If the button does not work, paste this into your browser:
      </p>
-     <p style="margin:0 0 24px;font-size:13px;word-break:break-all;opacity:0.7;">${url}</p>
+     <p style="margin:0 0 24px;font-size:13px;word-break:break-all;opacity:0.7;">${htmlUrl}</p>
      <p style="margin:0;font-size:13px;opacity:0.7;">
        If you should not be receiving these, ignore this email and tell
        ${companyName} to take you off the list. We will keep showing them this
@@ -158,21 +169,21 @@ export function verifyRecipientEmail(params: {
   const text = [
     "Do you receive shift reports?",
     "",
-    `Hi ${name}, ${companyName} uses Transient to send the nightly security report`,
-    `for ${siteName}, and they have listed this address as somewhere it should go.`,
+    `Hi ${params.name}, ${params.companyName} uses Transient to send the nightly security report`,
+    `for ${params.siteName}, and they have listed this address as somewhere it should go.`,
     "",
     "One tap confirms the address works. That is all it does. It does not create",
     "an account and it does not sign you up for anything else.",
     "",
     url,
     "",
-    `If you should not be receiving these, ignore this email and tell ${companyName}`,
+    `If you should not be receiving these, ignore this email and tell ${params.companyName}`,
     "to take you off the list.",
   ].join("\n");
 
   return {
     to,
-    subject: `Confirm you receive ${siteName} shift reports`,
+    subject: `Confirm you receive ${params.siteName} shift reports`,
     html,
     text,
   };
@@ -250,6 +261,70 @@ export function teamInviteEmail(params: {
   return {
     to,
     subject: `${params.invitedBy} added you to ${params.companyName} on Transient`,
+    html,
+    text,
+  };
+}
+
+/**
+ * "Confirm your email and we will set the company up."
+ *
+ * Unlike every other email here, nothing exists yet when this is sent: no
+ * company, no user, no site. The link carries a signed payload and creating
+ * the account is what clicking it does. That is deliberate — verifying after
+ * creation would let anyone squat a company name with an address they do not
+ * own, and would leave a tenant behind every typo'd sign-up.
+ */
+export function signUpVerifyEmail(params: {
+  to: string;
+  name: string;
+  companyName: string;
+  url: string;
+  trialDays: number;
+}): EmailMessage {
+  const name = escapeHtml(params.name);
+  const companyName = escapeHtml(params.companyName);
+  const { to, url, trialDays } = params;
+  const htmlUrl = escapeHtml(url);
+
+  const html = shell(
+    "Confirm your email",
+    `<p style="margin:0 0 24px;font-size:16px;line-height:1.5;">
+       Hi ${name}, you started setting up <strong>${companyName}</strong> on
+       Transient. Confirm this address and we will create the account and sign
+       you in.
+     </p>
+     <p style="margin:0 0 24px;">
+       <a href="${htmlUrl}"
+          style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
+         Confirm and start ${trialDays} days free
+       </a>
+     </p>
+     <p style="margin:0 0 8px;font-size:13px;opacity:0.7;">
+       If the button does not work, paste this into your browser:
+     </p>
+     <p style="margin:0 0 24px;font-size:13px;word-break:break-all;opacity:0.7;">${htmlUrl}</p>
+     <p style="margin:0;font-size:13px;opacity:0.7;">
+       No card, and nothing is created until you tap. If you did not start
+       this, ignore the email and nothing happens.
+     </p>`,
+  );
+
+  const text = [
+    "Confirm your email",
+    "",
+    `Hi ${params.name}, you started setting up ${params.companyName} on Transient.`,
+    "Confirm this address and we will create the account and sign you in.",
+    "",
+    url,
+    "",
+    `No card, and the ${trialDays}-day trial starts when you tap. If you did not`,
+    "start this, ignore the email and nothing happens.",
+  ].join("\n");
+
+  return {
+    to,
+    subject: `Confirm your email to finish setting up ${params.companyName}`,
     html,
     text,
   };

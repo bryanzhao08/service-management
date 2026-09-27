@@ -392,6 +392,16 @@ export function planById(id: PlanId): Plan {
 }
 
 /**
+ * Narrowing counterpart to `planById`, for plan ids that arrive from outside
+ * the app — a `?plan=` on a marketing link, a stored string on a Company row.
+ * `planById` throws by design, which is right at a write and wrong when the
+ * question is simply whether a stranger's query string names a real plan.
+ */
+export function isPlanId(value: string): value is PlanId {
+  return PLANS.some((p) => p.id === value);
+}
+
+/**
  * Cheapest published price for an audience, for marketing copy.
  *
  * Exists so the landing page cannot quote a number this module has stopped

@@ -37,6 +37,18 @@ export default auth((req) => {
 
   const isPublic =
     PUBLIC_PATHS.includes(pathname) ||
+    // Sign-up, and the two pages the link walks through. Everyone who reaches
+    // these has no account by definition — that is the entire feature — so a
+    // session check here does not protect anything, it closes the only door
+    // in. Gating it was a real bug, not a theoretical one: the marketing
+    // page's "Start 30 days free" button landed on a sign-in form telling
+    // people to ask their supervisor for an account.
+    //
+    // Nothing here writes to the database without a valid signed token, and
+    // `/sign-up/verify` checks that token itself, the same argument as the
+    // signed links below.
+    pathname === "/sign-up" ||
+    pathname.startsWith("/sign-up/") ||
     pathname.startsWith("/dev/") ||
     // Provider callbacks carry no session cookie and never will. The route
     // authenticates the *payload* with a Svix signature instead, which is a
@@ -96,7 +108,10 @@ export default auth((req) => {
   }
 
   // A signed-in user has no reason to see the sign-in form.
-  if (req.auth && (pathname === "/sign-in" || pathname === "/verify")) {
+  if (
+    req.auth &&
+    (pathname === "/sign-in" || pathname === "/verify" || pathname === "/sign-up")
+  ) {
     return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin));
   }
 
